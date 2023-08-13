@@ -4,13 +4,13 @@ import torch
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.data.sampler import BatchSampler, SequentialSampler
 import argparse
-
+import os
 from dataset.mesh import MeshDataset, DataPreFetcher
 from models.render import PointCloudRender
 from utils.distributed_utils import init_distributed_mode
 
 def build_dataloader(args):
-	dataset = MeshDataset(args)
+	dataset = MeshDataset(args, device=args.device)
 	if args.distributed:
 		sampler = DistributedSampler(dataset, shuffle=False)
 	else:
@@ -26,22 +26,27 @@ def build_dataloader(args):
 
 
 def generate_pointcloud(args):
-	model = PointCloudRender(device=args.device)
+	model = PointCloudRender(
+		args=args, 
+		batch_size=args.batch_size,
+		device=args.device
+	)
 	model.to(args.device)
 	data_loader = build_dataloader(args)
 
-	fetcher = DataPreFetcher(data_loader, args.device)
+	# fetcher = DataPreFetcher(data_loader, args.device)
 	# mesh, uid = fetcher.next()
 	# for i in range(len(data_loader)):
-	for mesh, uid in data_loader:
-		print(f"Start render pointcloud of {uid}")
-		model(mesh, uid)
+	for batch_mesh, batch_uid in data_loader:
+		print(f"Start render pointcloud of {batch_uid}")
+		model(batch_mesh, batch_uid)
 		# mesh, uid = fetcher.next()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser("Objaverse Pointcloud")
-	parser.add_argument("--device", default="cpu", type=str)
+	parser.add_argument("--device", default="cuda", type=str)
 	parser.add_argument("--num_gpus", default=1, type=int)
+	parser.add_argument("--batch_size", default=1, type=int)
 	parser.add_argument('--num_workers', default=0, type=int)	
 	parser.add_argument('--total_uid_counts', default=1, type=int)
 	parser.add_argument('--output_dir', default='data/Objaverse', type=str)

@@ -46,7 +46,11 @@ class MeshDataset(torch.utils.data.Dataset):
 			else:
 				main_color = material.baseColorFactor
 		if maps is not None:
-			maps = torch.tensor(np.array(maps), dtype=torch.float, device=self.device).unsqueeze(0)[:, :, :, :3] / 255.
+			if maps.mode != 'RGB':
+				maps = maps.convert('RGB')
+			maps = torch.tensor(np.array(maps), dtype=torch.float, device=self.device)
+			maps = torch.div(maps, 255.0)
+			maps = maps.unsqueeze(0)
 			uvs = torch.tensor(visual.uv, dtype=torch.float, device=self.device).unsqueeze(0)
 			textures = TexturesUV(maps, faces, uvs)
 		elif main_color is not None:
@@ -60,6 +64,7 @@ class MeshDataset(torch.utils.data.Dataset):
 		faces = torch.tensor(geometry.faces, dtype=torch.int, device=self.device).unsqueeze(0)
 		textures = self.get_textures(geometry.visual, faces)
 		mesh = Meshes(verts, faces, textures)
+		mesh = mesh.to(self.device)
 
 		verts = mesh.verts_packed()
 		center = verts.mean(0)
@@ -71,13 +76,11 @@ class MeshDataset(torch.utils.data.Dataset):
 
 	def save_temp_mesh(self, filename_obj, geometry, mesh):
 		filename = os.path.basename(filename_obj)[:-4]
-		pytorch3d_dir = os.path.join(self.temp_dir, "temp/pytorch3d")
-		trimesh_dir = os.path.join(self.temp_dir, "temp/trimesh")
-		os.makedirs(pytorch3d_dir, exist_ok=True)
-		os.makedirs(trimesh_dir, exist_ok=True)
-		shutil.copy2(filename_obj, os.path.join(pytorch3d_dir, f"{filename}.glb"))
-		trimesh.exchange.export.export_mesh(geometry, os.path.join(trimesh_dir, f"{filename}.obj"), file_type="obj")
-		IO().save_mesh(mesh, os.path.join(pytorch3d_dir, f"{filename}.obj"), include_textures=True)
+		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
+		os.makedirs(save_dir, exist_ok=True)
+		shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
+		trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+		IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)
@@ -88,7 +91,11 @@ class MeshDataset(torch.utils.data.Dataset):
 		return mesh, uid
 
 	def collect_fn(self, batch):
-		return batch[0]
+		batch_mesh, batch_uid = [], []
+		for mesh, uid in batch:
+			batch_mesh.append(mesh)
+			batch_uid.append(uid)
+		return batch_mesh, batch_uid
 
 	
 class DataPreFetcher:
@@ -102,8 +109,8 @@ class DataPreFetcher:
 		self.preload()
 
 	def to_cuda(self):
-		self.next_mesh = self.next_mesh.to(self.device)
-
+		for mesh in self.next_mesh:
+			mesh.to(self.device)
 
 	def preload(self):
 		try:
@@ -112,8 +119,8 @@ class DataPreFetcher:
 			self.next_mesh = None
 			self.next_uid = None
 			return
-		with torch.cuda.stream(self.stream):
-			self.to_cuda()
+		# with torch.cuda.stream(self.stream):
+		# 	self.to_cuda()
 
 	def next(self):
 		torch.cuda.current_stream().wait_stream(self.stream)

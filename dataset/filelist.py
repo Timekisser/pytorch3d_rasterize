@@ -25,7 +25,7 @@ class FileList:
 					self.uids.append(uid)
 				if len(self.uids) >= self.total_uid_counts:
 					break
-		self.annotations = objaverse.load_annotations(self.uids)
+		# self.annotations = objaverse.load_annotations(self.uids)
 		processes = 1 #mp.cpu_count()
 		self.glbs = objaverse.load_objects(self.uids, processes)
 
