@@ -32,9 +32,9 @@ class MeshDataset(torch.utils.data.Dataset):
 		geometry = trimesh.util.concatenate(scene.dump())
 		return geometry
 
-	def get_textures(self, visual, faces):
+	def get_textures(self, visual, verts, faces):
 		material = visual.material
-		maps, main_color = None, None
+		maps, main_color, valid = None, None, True
 		if isinstance(material, trimesh.visual.material.SimpleMaterial):
 			if material.image is not None:
 				maps = material.image
@@ -43,8 +43,11 @@ class MeshDataset(torch.utils.data.Dataset):
 		else:
 			if material.baseColorTexture is not None:
 				maps = material.baseColorTexture
-			else:
+			elif material.baseColorFactor is not None:
 				main_color = material.baseColorFactor
+			else:
+				main_color = material.main_color
+				valid = False
 		if maps is not None:
 			if maps.mode != 'RGB':
 				maps = maps.convert('RGB')
@@ -54,15 +57,16 @@ class MeshDataset(torch.utils.data.Dataset):
 			uvs = torch.tensor(visual.uv, dtype=torch.float, device=self.device).unsqueeze(0)
 			textures = TexturesUV(maps, faces, uvs)
 		elif main_color is not None:
-			vert_colors = torch.tensor(material.baseColorFactor, dtype=torch.float, device=self.device)
+			vert_colors = torch.tensor(main_color, dtype=torch.float, device=self.device)
+			vert_colors = vert_colors[:3].reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
 			textures = TexturesVertex(vert_colors)
-		return textures
+		return textures, valid
 	
 	def load_mesh(self, filename_obj):
 		geometry = self.get_geometry(filename_obj)
 		verts = torch.tensor(geometry.vertices, dtype=torch.float, device=self.device).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.int, device=self.device).unsqueeze(0)
-		textures = self.get_textures(geometry.visual, faces)
+		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
 		mesh = mesh.to(self.device)
 
@@ -72,7 +76,7 @@ class MeshDataset(torch.utils.data.Dataset):
 		mesh.offset_verts_(-center)
 		mesh.scale_verts_((1.0 / float(scale)))
 		self.save_temp_mesh(filename_obj, geometry, mesh) 
-		return mesh
+		return mesh, valid
 
 	def save_temp_mesh(self, filename_obj, geometry, mesh):
 		filename = os.path.basename(filename_obj)[:-4]
@@ -84,22 +88,22 @@ class MeshDataset(torch.utils.data.Dataset):
 		
 		if "obj" in self.args.save_file_type:
 			trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-			IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+			# IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)
 	
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		mesh = self.load_mesh(self.filelist.glbs[uid])
-		return mesh, uid
+		mesh, valid = self.load_mesh(self.filelist.glbs[uid])
+		return {
+			"mesh": mesh,
+			"uid": uid,
+			"valid": valid,
+		}
 
 	def collect_fn(self, batch):
-		batch_mesh, batch_uid = [], []
-		for mesh, uid in batch:
-			batch_mesh.append(mesh)
-			batch_uid.append(uid)
-		return batch_mesh, batch_uid
+		return batch
 
 	
 class DataPreFetcher:
@@ -107,31 +111,24 @@ class DataPreFetcher:
 	def __init__(self, loader, device):
 		self.loader = iter(loader)
 		self.device = device
-		self.next_mesh = None
-		self.next_uid = None
+		self.next_batch = None
 		self.stream = torch.cuda.Stream()
 		self.preload()
 
-	def to_cuda(self):
-		for mesh in self.next_mesh:
-			mesh.to(self.device)
 
 	def preload(self):
 		try:
-			self.next_mesh, self.next_uid = next(self.loader)
+			self.next_batch = next(self.loader)
 		except StopIteration:
-			self.next_mesh = None
-			self.next_uid = None
+			self.next_batch = None
 			return
 		# with torch.cuda.stream(self.stream):
 		# 	self.to_cuda()
 
 	def next(self):
 		torch.cuda.current_stream().wait_stream(self.stream)
-		mesh, uid = self.next_mesh, self.next_uid
-		if mesh is not None:
-			self.next_mesh.record_stream(torch.cuda.current_stream())
-		if uid is not None:
-			self.next_uid.record_stream(torch.cuda.current_stream())
+		batch = self.next_batch
+		if batch is not None:
+			self.next_batch.record_stream(torch.cuda.current_stream())
 		self.preload()
-		return [mesh, uid]
+		return batch

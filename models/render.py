@@ -72,6 +72,7 @@ class PointCloudRender(torch.nn.Module):
 			image_size=self.image_size,
 			blur_radius=0.0,
 			faces_per_pixel=1,
+			# max_faces_per_bin=1
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizer(
@@ -146,9 +147,13 @@ class PointCloudRender(torch.nn.Module):
 			np.savez(filename_npy, points=points, normals=normals, colors=colors)
 
 
-	def forward(self, batch_mesh, batch_uid):
+	def forward(self, batch):
 		# TODO: render by a batch
-		for mesh, uid in zip(batch_mesh, batch_uid):
+		for data in batch:
+			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
+			if not valid:
+				continue 
+			print(f"Start render pointcloud of {uid}")
 			meshes = mesh.extend(self.num_views)
 			fragments, images = self.render(meshes)
 			if "png" in self.args.save_file_type:

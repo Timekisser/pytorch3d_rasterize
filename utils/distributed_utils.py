@@ -84,7 +84,6 @@ def init_distributed_mode(args):
     if args.batch_size % args.world_size != 0:
         raise Exception("Batch size should be divisible by world size.")
     args.batch_size //= args.world_size
-    args.eval_batch_size //= args.world_size
 
 
 def all_gather(data):
