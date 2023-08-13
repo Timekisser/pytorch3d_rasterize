@@ -151,8 +151,8 @@ class PointCloudRender(torch.nn.Module):
 		# TODO: render by a batch
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
-			if not valid:
-				continue 
+			# if not valid:
+			# 	continue
 			print(f"Start render pointcloud of {uid}")
 			meshes = mesh.extend(self.num_views)
 			fragments, images = self.render(meshes)

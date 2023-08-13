@@ -11,6 +11,7 @@ from tqdm import tqdm
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
+	Textures,
 	TexturesUV,
 	TexturesVertex,
 )
@@ -34,6 +35,7 @@ class MeshDataset(torch.utils.data.Dataset):
 
 	def get_textures(self, visual, verts, faces):
 		material = visual.material
+		# TODO: whether the mesh is valid
 		maps, main_color, valid = None, None, True
 		if isinstance(material, trimesh.visual.material.SimpleMaterial):
 			if material.image is not None:
@@ -47,7 +49,6 @@ class MeshDataset(torch.utils.data.Dataset):
 				main_color = material.baseColorFactor
 			else:
 				main_color = material.main_color
-				valid = False
 		if maps is not None:
 			if maps.mode != 'RGB':
 				maps = maps.convert('RGB')
@@ -58,7 +59,8 @@ class MeshDataset(torch.utils.data.Dataset):
 			textures = TexturesUV(maps, faces, uvs)
 		elif main_color is not None:
 			vert_colors = torch.tensor(main_color, dtype=torch.float, device=self.device)
-			vert_colors = vert_colors[:3].reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
+			vert_colors = vert_colors[:3] / 255.
+			vert_colors = vert_colors.reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
 			textures = TexturesVertex(vert_colors)
 		return textures, valid
 	
