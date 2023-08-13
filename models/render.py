@@ -19,9 +19,9 @@ from pytorch3d.renderer import (
 	PointsRenderer,
 )
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
-
+from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=1024, camera_dist=3, batch_size=1, enable_image=True, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=1024, camera_dist=3, batch_size=1, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -34,20 +34,40 @@ class PointCloudRender(torch.nn.Module):
 		self.device = device
 
 		self.renderer = self.get_renderer()
-
+		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
 		self.pointcloud_dir = os.path.join(output_dir, "pointcloud") 
 		os.makedirs(self.image_dir, exist_ok=True)
 		os.makedirs(self.pointcloud_dir, exist_ok=True)
-		self.enable_image = enable_image
+
+	def get_transform(self, cameras):
+
+		world_to_view_transform = cameras.get_world_to_view_transform()
+		to_ndc_transform = cameras.get_ndc_camera_transform()
+		projection_transform = try_get_projection_transform(cameras)
+		if projection_transform is not None:
+			projection_transform = projection_transform.compose(to_ndc_transform)
+			full_transform = world_to_view_transform.compose(projection_transform)
+		else:
+			# Call transform_points instead of explicitly composing transforms to handle
+			# the case, where camera class does not have a projection matrix form.
+			full_transform = cameras.get_full_projection_transform()	
+		return full_transform
 
 	def get_renderer(self):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
 		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
-		# cameras = FoVPerspectiveCameras(device=device, R=R, T=T)
-		cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
+		if self.args.camera_mode == "Perspective":
+			cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
+		elif self.args.camera_mode == "Orthographic":
+			cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
+		else:
+			raise Exception("No such camera mode.")
+
+		# self.transform = self.get_transform(cameras)
+
 		raster_settings = RasterizationSettings(
 			image_size=self.image_size,
 			blur_radius=0.0,
@@ -75,7 +95,7 @@ class PointCloudRender(torch.nn.Module):
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
 		print("Saved image as " + str(save_dir))
-		for i in range(self.batch_size):
+		for i in range(self.num_views):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]
 			filename_png = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}.png")
@@ -118,9 +138,12 @@ class PointCloudRender(torch.nn.Module):
 		print("Saved pointcloud as " + str(save_dir))
 		os.makedirs(save_dir, exist_ok=True)
 		filename_xyz = os.path.join(save_dir, "pointcloud.ply")
-		filename_npy = os.path.join(save_dir, "pointcloud.npz") 
-		pointcloud.export(filename_xyz, file_type="ply")
-		np.savez(filename_npy, points=points, normals=normals, colors=colors)
+		filename_npy = os.path.join(save_dir, "pointcloud.npz")
+
+		if "ply" in self.args.save_file_type: 
+			pointcloud.export(filename_xyz, file_type="ply")
+		if "npz" in self.args.save_file_type:
+			np.savez(filename_npy, points=points, normals=normals, colors=colors)
 
 
 	def forward(self, batch_mesh, batch_uid):
@@ -128,6 +151,7 @@ class PointCloudRender(torch.nn.Module):
 		for mesh, uid in zip(batch_mesh, batch_uid):
 			meshes = mesh.extend(self.num_views)
 			fragments, images = self.render(meshes)
-			if self.enable_image:
+			if "png" in self.args.save_file_type:
 				self.gen_image(images, uid)
+
 			self.gen_pointcloud(meshes, fragments, images, uid)

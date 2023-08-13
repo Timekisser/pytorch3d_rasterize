@@ -78,9 +78,13 @@ class MeshDataset(torch.utils.data.Dataset):
 		filename = os.path.basename(filename_obj)[:-4]
 		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
 		os.makedirs(save_dir, exist_ok=True)
-		shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
-		trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+		
+		if "glb" in self.args.save_file_type:
+			shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
+		
+		if "obj" in self.args.save_file_type:
+			trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+			IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)

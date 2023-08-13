@@ -42,14 +42,17 @@ def generate_pointcloud(args):
 		model(batch_mesh, batch_uid)
 		# mesh, uid = fetcher.next()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 	parser = argparse.ArgumentParser("Objaverse Pointcloud")
 	parser.add_argument("--device", default="cuda", type=str)
 	parser.add_argument("--num_gpus", default=1, type=int)
 	parser.add_argument("--batch_size", default=1, type=int)
-	parser.add_argument('--num_workers', default=0, type=int)	
-	parser.add_argument('--total_uid_counts', default=1, type=int)
-	parser.add_argument('--output_dir', default='data/Objaverse', type=str)
+	parser.add_argument("--num_workers", default=0, type=int)	
+	parser.add_argument("--total_uid_counts", default=1, type=int)
+	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
+	parser.add_argument("--camera_mode", default="Perspective", type=str)
+	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
+	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb"], type=list) #"obj",
 	args = parser.parse_args()
 	init_distributed_mode(args)
 	generate_pointcloud(args)
