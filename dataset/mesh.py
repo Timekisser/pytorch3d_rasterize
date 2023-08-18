@@ -23,7 +23,7 @@ class MeshDataset(torch.utils.data.Dataset):
 		super(MeshDataset, self).__init__()
 		self.args = args
 		self.device = device
-		self.filelist = FileList(args.total_uid_counts)
+		self.filelist = FileList(args, args.total_uid_counts, args.objaverse_dir)
 		self.temp_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
@@ -97,7 +97,11 @@ class MeshDataset(torch.utils.data.Dataset):
 	
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		mesh, valid = self.load_mesh(self.filelist.glbs[uid])
+		filename_ply = os.path.join(self.args.output_dir, "pointcloud", uid, "pointcloud.npz")
+		if os.path.exists(filename_ply):
+			mesh, valid = None, False
+		else:
+			mesh, valid = self.load_mesh(self.filelist.glbs[uid])
 		return {
 			"mesh": mesh,
 			"uid": uid,

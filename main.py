@@ -1,4 +1,4 @@
-# --------------------------------------------------------
+#--------------------------------------------------------
 # Dual Octree Graph Networks
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 	parser.add_argument("--num_gpus", default=1, type=int)
 	parser.add_argument("--batch_size", default=1, type=int)
 	parser.add_argument("--num_workers", default=0, type=int)	
-	parser.add_argument("--total_uid_counts", default=1, type=int)
+	parser.add_argument("--total_uid_counts", default=800000000, type=int)
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
 	parser.add_argument("--camera_mode", default="Perspective", type=str)
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)

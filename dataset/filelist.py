@@ -2,10 +2,10 @@ import objaverse
 import os
 
 class FileList:
-	def __init__(self, total_uid_counts=10, total_category_counts=1):
-		objaverse._VERSIONED_PATH = "/mnt/sdc/weist/objaverse/"
+	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse"):
+                self.args = args
+                objaverse._VERSIONED_PATH = objaverse_dir 
 		self.total_uid_counts = total_uid_counts
-		self.total_category_counts = total_category_counts
 
 		self.lvis_annotations = objaverse.load_lvis_annotations()
 		self.object_paths = objaverse._load_object_paths()

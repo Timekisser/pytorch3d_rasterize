@@ -81,9 +81,9 @@ def init_distributed_mode(args):
     torch.distributed.barrier()
     setup_for_distributed(args.rank == 0)
 
-    if args.batch_size % args.world_size != 0:
-        raise Exception("Batch size should be divisible by world size.")
-    args.batch_size //= args.world_size
+    # if args.batch_size % args.world_size != 0:
+        # raise Exception("Batch size should be divisible by world size.")
+    # args.batch_size //= args.world_size
 
 
 def all_gather(data):

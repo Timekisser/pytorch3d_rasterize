@@ -3,6 +3,8 @@ import torch.nn
 import numpy as np
 import os
 import trimesh
+import warnings
+from utils.tools import HiddenPrints
 import matplotlib.pyplot as plt
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
@@ -26,12 +28,15 @@ class PointCloudRender(torch.nn.Module):
 		self.args = args
 		self.image_size = image_size
 		self.camera_dist = camera_dist
+		self.batch_size = batch_size
 		self.elevation =  [0, 0,  0,   0,   -90, 90]
 		self.azim_angle = [0, 90, 180, 270, 0,   0]
-		self.batch_size = batch_size
 		self.num_views = len(self.elevation)
 		self.num_points = 100000
 		self.device = device
+
+		# self.elevation = self.elevation * self.batch_size
+		# self.azim_angle = self.azim_angle * self.batch_size
 
 		self.renderer = self.get_renderer()
 		self.full_transform = None
@@ -151,8 +156,9 @@ class PointCloudRender(torch.nn.Module):
 		# TODO: render by a batch
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
-			# if not valid:
-			# 	continue
+			if not valid:
+				print(f"Mesh {uid} is not valid.")
+				continue
 			print(f"Start render pointcloud of {uid}")
 			meshes = mesh.extend(self.num_views)
 			fragments, images = self.render(meshes)
