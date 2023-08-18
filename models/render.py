@@ -156,7 +156,7 @@ class PointCloudRender(torch.nn.Module):
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
-				print(f"Mesh {uid} is not valid.", flush=True)
+				# print(f"Mesh {uid} is not valid.", flush=True)
 				continue
 			print(f"Start render pointcloud of {uid}", flush=True)
 			meshes = mesh.extend(self.num_views)

@@ -31,7 +31,12 @@ class MeshDataset(torch.utils.data.Dataset):
 		# with open(filename_obj, "rb") as f:
 		# 	scene = trimesh.exchange.gltf.load_glb(f)
 		geometry = trimesh.util.concatenate(scene.dump())
-		return geometry
+		valid = True
+		if isinstance(geometry, trimesh.Trimesh):
+			valid = True
+		else:
+			valid = False
+		return geometry, valid
 
 	def get_textures(self, visual, verts, faces):
 		material = visual.material
@@ -68,7 +73,10 @@ class MeshDataset(torch.utils.data.Dataset):
 		if "glb" in self.args.save_file_type:
 			self.copy_glb(filename_obj)
 		
-		geometry = self.get_geometry(filename_obj)
+		geometry, valid = self.get_geometry(filename_obj)
+		if not valid:
+			print("Invalid geometry type.", flush=True)
+			return None, valid
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
@@ -79,6 +87,10 @@ class MeshDataset(torch.utils.data.Dataset):
 		scale = max((verts - center).abs().max(0)[0])
 		mesh.offset_verts_(-center)
 		mesh.scale_verts_((1.0 / float(scale)))
+
+		if not valid:
+			print("Invalid texture type.", flush=True)
+			return None, valid
 		if "obj" in self.args.save_file_type:
 			self.save_obj(filename_obj, geometry)
 		return mesh, valid
@@ -104,6 +116,7 @@ class MeshDataset(torch.utils.data.Dataset):
 		uid = self.filelist.uids[idx]
 		filename_ply = os.path.join(self.args.output_dir, "pointcloud", uid, "pointcloud.npz")
 		if self.args.resume and os.path.exists(filename_ply):
+			print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
 			mesh, valid = self.load_mesh(self.filelist.glbs[uid])
