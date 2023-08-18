@@ -3,8 +3,8 @@ import os
 
 class FileList:
 	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse"):
-                self.args = args
-                objaverse._VERSIONED_PATH = objaverse_dir 
+		self.args = args
+		objaverse._VERSIONED_PATH = objaverse_dir 
 		self.total_uid_counts = total_uid_counts
 
 		self.lvis_annotations = objaverse.load_lvis_annotations()
@@ -14,7 +14,8 @@ class FileList:
 		self.annotations = []
 
 		self.get_glbs()
-		
+		self.get_filelists()
+
 	def get_glbs(self):
 		self.uids = []
 		for category, cat_uids in self.lvis_annotations.items():
@@ -31,7 +32,7 @@ class FileList:
 
 	def get_filelists(self):
 		project_folder = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-		root_folder = os.path.join(project_folder, 'data/Objaverse')
+		root_folder = self.output_dir
 		glb_length = len(self.glbs)
 		train_length = int(glb_length * 0.8)
 		filelist_folder = os.path.join(root_folder, 'filelist')

@@ -23,7 +23,7 @@ from pytorch3d.renderer import (
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=1024, camera_dist=3, batch_size=1, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=1024, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -42,7 +42,7 @@ class PointCloudRender(torch.nn.Module):
 		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
-		self.pointcloud_dir = os.path.join(output_dir, "pointcloud") 
+		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
 		os.makedirs(self.image_dir, exist_ok=True)
 		os.makedirs(self.pointcloud_dir, exist_ok=True)
 
@@ -57,7 +57,7 @@ class PointCloudRender(torch.nn.Module):
 		else:
 			# Call transform_points instead of explicitly composing transforms to handle
 			# the case, where camera class does not have a projection matrix form.
-			full_transform = cameras.get_full_projection_transform()	
+			full_transform = cameras.get_full_projection_transform()
 		return full_transform
 
 	def get_renderer(self):
@@ -91,7 +91,7 @@ class PointCloudRender(torch.nn.Module):
 		# Create a mesh renderer by composing a rasterizer and a shader
 		renderer = MeshRenderer(rasterizer, shader)
 		return renderer
-	
+
 	def render(self, meshes):
 		fragments = self.renderer.rasterizer(meshes)
 		images = self.renderer.shader(fragments, meshes)
@@ -108,7 +108,7 @@ class PointCloudRender(torch.nn.Module):
 			plt.imshow(images[i, ..., :3].cpu().numpy())
 			plt.savefig(filename_png)
 			plt.cla()
-			
+
 	def gen_pointcloud(self, meshes, fragments, images, uid):
 		verts = meshes.verts_packed()  # (N, V, 3)
 		faces = meshes.faces_packed()  # (N, F, 3)
@@ -126,7 +126,7 @@ class PointCloudRender(torch.nn.Module):
 		pixel_coords = pixel_coords_in_camera[:, valid_x, valid_y, 0] # (N, P, 3)
 		pixel_normals = pixel_normals[:, valid_x, valid_y, 0]	# (N, P, 3)
 		pixel_colors = images[:, valid_x, valid_y, :]	# (N, P, 4)
-		
+
 		N, P = pixel_coords.shape[0], pixel_coords.shape[1]
 		random_indices = torch.randint(0, N * P, (self.num_points, ), device=self.device)
 		rows = random_indices // P
@@ -146,7 +146,7 @@ class PointCloudRender(torch.nn.Module):
 		filename_xyz = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")
 
-		if "ply" in self.args.save_file_type: 
+		if "ply" in self.args.save_file_type:
 			pointcloud.export(filename_xyz, file_type="ply")
 		if "npz" in self.args.save_file_type:
 			np.savez(filename_npy, points=points, normals=normals, colors=colors)

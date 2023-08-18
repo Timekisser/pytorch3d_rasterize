@@ -8,9 +8,13 @@ import os
 from dataset.mesh import MeshDataset, DataPreFetcher
 from models.render import PointCloudRender
 from utils.distributed_utils import init_distributed_mode
+from utils.distributed import (
+    get_rank,
+    synchronize,
+)
 
 def build_dataloader(args):
-	dataset = MeshDataset(args, device=args.device)
+	dataset = MeshDataset(args)
 	if args.distributed:
 		sampler = DistributedSampler(dataset, shuffle=False)
 	else:
@@ -24,11 +28,14 @@ def build_dataloader(args):
 	)
 	return data_loader
 
+def mesh_to_cuda(batch,device):
+	for data in batch:
+		data['mesh'] = data['mesh'].to(device)
 
 def generate_pointcloud(args):
 	model = PointCloudRender(
-		args=args, 
-		batch_size=args.batch_size,
+		args=args,
+		output_dir = args.output_dir,
 		device=args.device
 	)
 	model.to(args.device)
@@ -38,20 +45,31 @@ def generate_pointcloud(args):
 	# mesh, uid = fetcher.next()
 	# for i in range(len(data_loader)):
 	for batch in data_loader:
+		mesh_to_cuda(batch, model.device)
+		# batch[0]['mesh'] = batch[0]['mesh'].to(model.device)
 		model(batch)
 		# mesh, uid = fetcher.next()
 
 if __name__ == "__main__":
+	torch.multiprocessing.set_start_method('spawn')
 	parser = argparse.ArgumentParser("Objaverse Pointcloud")
 	parser.add_argument("--device", default="cuda", type=str)
-	parser.add_argument("--num_gpus", default=1, type=int)
 	parser.add_argument("--batch_size", default=1, type=int)
-	parser.add_argument("--num_workers", default=0, type=int)	
-	parser.add_argument("--total_uid_counts", default=800000000, type=int)
+	parser.add_argument("--backend", type=str, default="gloo", help="which backend to use")
+	parser.add_argument("--num_workers", default=8, type=int)
+	parser.add_argument("--total_uid_counts", default=1, type=int)
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
 	parser.add_argument("--camera_mode", default="Perspective", type=str)
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
 	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb", "obj"], type=list)
 	args = parser.parse_args()
-	init_distributed_mode(args)
+	# init_distributed_mode(args)
+	n_gpu = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
+	args.distributed = n_gpu > 1
+	args.local_rank = int(os.environ["LOCAL_RANK"]) if "LOCAL_RANK" in os.environ else 0
+	if args.distributed:
+		torch.cuda.set_device(args.local_rank)
+		torch.distributed.init_process_group(backend=args.backend, init_method="env://")
+		synchronize()
+
 	generate_pointcloud(args)
