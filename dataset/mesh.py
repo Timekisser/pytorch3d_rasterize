@@ -23,7 +23,7 @@ class MeshDataset(torch.utils.data.Dataset):
 		super(MeshDataset, self).__init__()
 		self.args = args
 		self.device = args.device
-		self.filelist = FileList(args, args.total_uid_counts, args.objaverse_dir)
+		self.filelist = FileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir)
 		self.temp_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
@@ -65,6 +65,9 @@ class MeshDataset(torch.utils.data.Dataset):
 		return textures, valid
 
 	def load_mesh(self, filename_obj):
+		if "glb" in self.args.save_file_type:
+			self.copy_glb(filename_obj)
+		
 		geometry = self.get_geometry(filename_obj)
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
@@ -76,20 +79,23 @@ class MeshDataset(torch.utils.data.Dataset):
 		scale = max((verts - center).abs().max(0)[0])
 		mesh.offset_verts_(-center)
 		mesh.scale_verts_((1.0 / float(scale)))
-		self.save_temp_mesh(filename_obj, geometry, mesh)
+		if "obj" in self.args.save_file_type:
+			self.save_obj(filename_obj, geometry)
 		return mesh, valid
 
-	def save_temp_mesh(self, filename_obj, geometry, mesh):
+	def copy_glb(self, filename_obj):
 		filename = os.path.basename(filename_obj)[:-4]
 		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
 		os.makedirs(save_dir, exist_ok=True)
+		shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
 
-		if "glb" in self.args.save_file_type:
-			shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
 
-		if "obj" in self.args.save_file_type:
-			trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-			# IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+	def save_obj(self, filename_obj, geometry):
+		filename = os.path.basename(filename_obj)[:-4]
+		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
+		os.makedirs(save_dir, exist_ok=True)
+		trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+		# IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)
@@ -97,7 +103,7 @@ class MeshDataset(torch.utils.data.Dataset):
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
 		filename_ply = os.path.join(self.args.output_dir, "pointcloud", uid, "pointcloud.npz")
-		if os.path.exists(filename_ply):
+		if self.args.resume and os.path.exists(filename_ply):
 			mesh, valid = None, False
 		else:
 			mesh, valid = self.load_mesh(self.filelist.glbs[uid])
@@ -133,7 +139,7 @@ class DataPreFetcher:
 	def next(self):
 		torch.cuda.current_stream().wait_stream(self.stream)
 		batch = self.next_batch
-		if batch is not None:
-			self.next_batch.record_stream(torch.cuda.current_stream())
+		# if batch is not None:
+			# self.next_batch.record_stream(torch.cuda.current_stream())
 		self.preload()
 		return batch

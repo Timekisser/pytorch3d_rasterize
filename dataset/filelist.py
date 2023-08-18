@@ -2,14 +2,15 @@ import objaverse
 import os
 
 class FileList:
-	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse"):
+	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse", output_dir="data/Objaverse"):
 		self.args = args
 		objaverse._VERSIONED_PATH = objaverse_dir 
 		self.total_uid_counts = total_uid_counts
 
 		self.lvis_annotations = objaverse.load_lvis_annotations()
 		self.object_paths = objaverse._load_object_paths()
-		self.base_dir = objaverse._VERSIONED_PATH
+		self.output_dir = output_dir
+		self.base_dir = objaverse_dir
 		self.uids = []
 		self.annotations = []
 
@@ -31,7 +32,6 @@ class FileList:
 		self.glbs = objaverse.load_objects(self.uids, processes)
 
 	def get_filelists(self):
-		project_folder = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 		root_folder = self.output_dir
 		glb_length = len(self.glbs)
 		train_length = int(glb_length * 0.8)

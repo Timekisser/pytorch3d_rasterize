@@ -5,9 +5,9 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.data.sampler import BatchSampler, SequentialSampler
 import argparse
 import os
+import sys
 from dataset.mesh import MeshDataset, DataPreFetcher
 from models.render import PointCloudRender
-from utils.distributed_utils import init_distributed_mode
 from utils.distributed import (
     get_rank,
     synchronize,
@@ -30,7 +30,8 @@ def build_dataloader(args):
 
 def mesh_to_cuda(batch,device):
 	for data in batch:
-		data['mesh'] = data['mesh'].to(device)
+		if data['mesh'] is not None:
+			data['mesh'] = data['mesh'].to(device)
 
 def generate_pointcloud(args):
 	model = PointCloudRender(
@@ -42,27 +43,40 @@ def generate_pointcloud(args):
 	data_loader = build_dataloader(args)
 
 	# fetcher = DataPreFetcher(data_loader, args.device)
-	# mesh, uid = fetcher.next()
+	# batch = fetcher.next()
 	# for i in range(len(data_loader)):
 	for batch in data_loader:
 		mesh_to_cuda(batch, model.device)
-		# batch[0]['mesh'] = batch[0]['mesh'].to(model.device)
 		model(batch)
-		# mesh, uid = fetcher.next()
+		# batch = fetcher.next()
 
 if __name__ == "__main__":
 	torch.multiprocessing.set_start_method('spawn')
 	parser = argparse.ArgumentParser("Objaverse Pointcloud")
+
+	# DDP settings
 	parser.add_argument("--device", default="cuda", type=str)
 	parser.add_argument("--batch_size", default=1, type=int)
 	parser.add_argument("--backend", type=str, default="gloo", help="which backend to use")
-	parser.add_argument("--num_workers", default=8, type=int)
-	parser.add_argument("--total_uid_counts", default=1, type=int)
+	parser.add_argument("--num_workers", default=0, type=int)
+
+	# Dataset settings
+	parser.add_argument("--resume", default=True, type=str, help="Continue processing.")
+	parser.add_argument("--total_uid_counts", default=8000000, type=int)
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
-	parser.add_argument("--camera_mode", default="Perspective", type=str)
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
-	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb", "obj"], type=list)
+	parser.add_argument("--log_dir", default='logs', type=str)
+	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb", "obj"], type=str, nargs="+")
+	
+	# Render settings
+	parser.add_argument("--camera_mode", default="Perspective", type=str)
+	parser.add_argument("--bin_mode", default="coarse", choices=["coarse", "naive"], type=str, help="Naive mode do not get warnings but is slower.")
+	parser.add_argument("--num_points", default=500000, type=int)	
 	args = parser.parse_args()
+
+	sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), "w")
+	sys.stderr = open(os.path.join(args.log_dir, "stderr.txt"), "w")
+	
 	# init_distributed_mode(args)
 	n_gpu = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
 	args.distributed = n_gpu > 1
@@ -72,4 +86,8 @@ if __name__ == "__main__":
 		torch.distributed.init_process_group(backend=args.backend, init_method="env://")
 		synchronize()
 
+	print(args, flush=True)
 	generate_pointcloud(args)
+	
+	sys.stdout.close()
+	sys.stderr.close()

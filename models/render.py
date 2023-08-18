@@ -3,8 +3,7 @@ import torch.nn
 import numpy as np
 import os
 import trimesh
-import warnings
-from utils.tools import HiddenPrints
+import sys
 import matplotlib.pyplot as plt
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
@@ -28,11 +27,11 @@ class PointCloudRender(torch.nn.Module):
 		self.args = args
 		self.image_size = image_size
 		self.camera_dist = camera_dist
-		self.batch_size = batch_size
+		self.batch_size = args.batch_size
 		self.elevation =  [0, 0,  0,   0,   -90, 90]
 		self.azim_angle = [0, 90, 180, 270, 0,   0]
 		self.num_views = len(self.elevation)
-		self.num_points = 100000
+		self.num_points = args.num_points
 		self.device = device
 
 		# self.elevation = self.elevation * self.batch_size
@@ -77,7 +76,7 @@ class PointCloudRender(torch.nn.Module):
 			image_size=self.image_size,
 			blur_radius=0.0,
 			faces_per_pixel=1,
-			# max_faces_per_bin=1
+			bin_size=None if self.args.bin_mode == "coarse" else 0,
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizer(
@@ -100,7 +99,7 @@ class PointCloudRender(torch.nn.Module):
 	def gen_image(self, images, uid):
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
-		print("Saved image as " + str(save_dir))
+		print("Saved image as " + str(save_dir), flush=True)
 		for i in range(self.num_views):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]
@@ -141,7 +140,7 @@ class PointCloudRender(torch.nn.Module):
 
 		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors)
 		save_dir = os.path.join(self.pointcloud_dir, uid)
-		print("Saved pointcloud as " + str(save_dir))
+		print("Saved pointcloud as " + str(save_dir), flush=True)
 		os.makedirs(save_dir, exist_ok=True)
 		filename_xyz = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")
@@ -157,9 +156,9 @@ class PointCloudRender(torch.nn.Module):
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
-				print(f"Mesh {uid} is not valid.")
+				print(f"Mesh {uid} is not valid.", flush=True)
 				continue
-			print(f"Start render pointcloud of {uid}")
+			print(f"Start render pointcloud of {uid}", flush=True)
 			meshes = mesh.extend(self.num_views)
 			fragments, images = self.render(meshes)
 			if "png" in self.args.save_file_type:
