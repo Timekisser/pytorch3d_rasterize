@@ -61,8 +61,9 @@ if __name__ == "__main__":
 	parser.add_argument("--num_workers", default=0, type=int)
 
 	# Dataset settings
-	parser.add_argument("--resume", default=True, type=str, help="Continue processing.")
+	parser.add_argument("--resume", default=True, type=bool, help="Continue processing.")
 	parser.add_argument("--total_uid_counts", default=8000000, type=int)
+	parser.add_argument("--have_category", default=False, type=bool)
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
 	parser.add_argument("--log_dir", default='logs', type=str)

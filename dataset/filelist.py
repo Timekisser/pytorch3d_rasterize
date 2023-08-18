@@ -1,5 +1,6 @@
 import objaverse
 import os
+from tqdm import tqdm
 
 class FileList:
 	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse", output_dir="data/Objaverse"):
@@ -19,14 +20,20 @@ class FileList:
 
 	def get_glbs(self):
 		self.uids = []
-		for category, cat_uids in self.lvis_annotations.items():
-			for uid in cat_uids:
-				filepath = self.object_paths[uid]
-				full_path = os.path.join(self.base_dir, filepath)
-				if os.path.exists(full_path):
-					self.uids.append(uid)
-				if len(self.uids) >= self.total_uid_counts:
-					break
+		all_uids = []
+		if self.args.have_category:
+			for category, cat_uids in self.lvis_annotations.items():
+				all_uids += cat_uids
+		else:
+			all_uids = objaverse.load_uids()
+
+		for uid in tqdm(all_uids):
+			filepath = self.object_paths[uid]
+			full_path = os.path.join(self.base_dir, filepath)
+			if os.path.exists(full_path):
+				self.uids.append(uid)
+			if len(self.uids) >= self.total_uid_counts:
+				break
 		# self.annotations = objaverse.load_annotations(self.uids)
 		processes = 1 #mp.cpu_count()
 		self.glbs = objaverse.load_objects(self.uids, processes)
@@ -34,18 +41,18 @@ class FileList:
 	def get_filelists(self):
 		root_folder = self.output_dir
 		glb_length = len(self.glbs)
-		train_length = int(glb_length * 0.8)
+		train_length = int(glb_length)
 		filelist_folder = os.path.join(root_folder, 'filelist')
 		if not os.path.exists(filelist_folder):
 			os.makedirs(filelist_folder)
-		train_list = os.path.join(filelist_folder, 'train.txt')
-		eval_list = os.path.join(filelist_folder, 'val.txt')
+		train_list = os.path.join(filelist_folder, 'all.txt')
+		# eval_list = os.path.join(filelist_folder, 'val.txt')
 		filenames = list(self.glbs.keys())
 		with open(train_list, "w") as f:
 			for filename in filenames[:train_length]:
 				f.write(filename)
 				f.write('\n')
-		with open(eval_list, "w") as f:
-			for filename in filenames[train_length:]:
-				f.write(filename)
-				f.write('\n')
+		# with open(eval_list, "w") as f:
+		# 	for filename in filenames[train_length:]:
+		# 		f.write(filename)
+		# 		f.write('\n')
