@@ -19,11 +19,10 @@ from pytorch3d.renderer import (
 from dataset.filelist import FileList
 
 class MeshDataset(torch.utils.data.Dataset):
-	def __init__(self, args, device="cpu"):
+	def __init__(self, args):
 		super(MeshDataset, self).__init__()
 		self.args = args
-		self.device = device
-		self.filelist = FileList(args.total_uid_counts)
+		self.filelist = FileList(args.objaverse_dir, args.output_dir, args.total_uid_counts)
 		self.temp_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
@@ -52,49 +51,48 @@ class MeshDataset(torch.utils.data.Dataset):
 		if maps is not None:
 			if maps.mode != 'RGB':
 				maps = maps.convert('RGB')
-			maps = torch.tensor(np.array(maps), dtype=torch.float, device=self.device)
+			maps = torch.tensor(np.array(maps), dtype=torch.float)
 			maps = torch.div(maps, 255.0)
 			maps = maps.unsqueeze(0)
-			uvs = torch.tensor(visual.uv, dtype=torch.float, device=self.device).unsqueeze(0)
+			uvs = torch.tensor(visual.uv, dtype=torch.float).unsqueeze(0)
 			textures = TexturesUV(maps, faces, uvs)
 		elif main_color is not None:
-			vert_colors = torch.tensor(main_color, dtype=torch.float, device=self.device)
+			vert_colors = torch.tensor(main_color, dtype=torch.float)
 			vert_colors = vert_colors[:3] / 255.
 			vert_colors = vert_colors.reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
 			textures = TexturesVertex(vert_colors)
 		return textures, valid
-	
+
 	def load_mesh(self, filename_obj):
 		geometry = self.get_geometry(filename_obj)
-		verts = torch.tensor(geometry.vertices, dtype=torch.float, device=self.device).unsqueeze(0)
-		faces = torch.tensor(geometry.faces, dtype=torch.int, device=self.device).unsqueeze(0)
+		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
+		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
-		mesh = mesh.to(self.device)
 
 		verts = mesh.verts_packed()
 		center = verts.mean(0)
 		scale = max((verts - center).abs().max(0)[0])
 		mesh.offset_verts_(-center)
 		mesh.scale_verts_((1.0 / float(scale)))
-		self.save_temp_mesh(filename_obj, geometry, mesh) 
+		self.save_temp_mesh(filename_obj, geometry, mesh)
 		return mesh, valid
 
 	def save_temp_mesh(self, filename_obj, geometry, mesh):
 		filename = os.path.basename(filename_obj)[:-4]
 		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
 		os.makedirs(save_dir, exist_ok=True)
-		
+
 		if "glb" in self.args.save_file_type:
 			shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
-		
+
 		if "obj" in self.args.save_file_type:
 			trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
 			# IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)
-	
+
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
 		mesh, valid = self.load_mesh(self.filelist.glbs[uid])
@@ -107,7 +105,7 @@ class MeshDataset(torch.utils.data.Dataset):
 	def collect_fn(self, batch):
 		return batch
 
-	
+
 class DataPreFetcher:
 
 	def __init__(self, loader, device):
