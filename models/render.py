@@ -142,11 +142,11 @@ class PointCloudRender(torch.nn.Module):
 		save_dir = os.path.join(self.pointcloud_dir, uid)
 		print("Saved pointcloud as " + str(save_dir), flush=True)
 		os.makedirs(save_dir, exist_ok=True)
-		filename_xyz = os.path.join(save_dir, "pointcloud.ply")
+		filename_ply = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")
 
 		if "ply" in self.args.save_file_type:
-			pointcloud.export(filename_xyz, file_type="ply")
+			pointcloud.export(filename_ply, file_type="ply")
 		if "npz" in self.args.save_file_type:
 			np.savez(filename_npy, points=points, normals=normals, colors=colors)
 

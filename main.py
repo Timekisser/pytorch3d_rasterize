@@ -51,7 +51,7 @@ def generate_pointcloud(args):
 		# batch = fetcher.next()
 
 if __name__ == "__main__":
-	torch.multiprocessing.set_start_method('spawn')
+	# torch.multiprocessing.set_start_method('spawn')
 	parser = argparse.ArgumentParser("Objaverse Pointcloud")
 
 	# DDP settings
@@ -75,6 +75,7 @@ if __name__ == "__main__":
 	parser.add_argument("--num_points", default=500000, type=int)	
 	args = parser.parse_args()
 
+	os.makedirs(args.log_dir, exist_ok=True)
 	sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), "w")
 	sys.stderr = open(os.path.join(args.log_dir, "stderr.txt"), "w")
 	
