@@ -6,7 +6,7 @@ from torch.utils.data.sampler import BatchSampler, SequentialSampler
 import argparse
 import os
 import sys
-from dataset.mesh import MeshDataset, DataPreFetcher
+from dataset.objaverse import ObjaverseDataset, DataPreFetcher
 from models.render import PointCloudRender
 from utils.distributed import (
     get_rank,
@@ -14,7 +14,7 @@ from utils.distributed import (
 )
 
 def build_dataloader(args):
-	dataset = MeshDataset(args)
+	dataset = ObjaverseDataset(args)
 	if args.distributed:
 		sampler = DistributedSampler(dataset, shuffle=False)
 	else:
@@ -61,9 +61,9 @@ if __name__ == "__main__":
 	parser.add_argument("--num_workers", default=0, type=int)
 
 	# Dataset settings
-	parser.add_argument("--resume", default=True, type=bool, help="Continue processing.")
+	parser.add_argument("--resume", action="store_true")
 	parser.add_argument("--total_uid_counts", default=8000000, type=int)
-	parser.add_argument("--have_category", default=False, type=bool)
+	parser.add_argument("--have_category", action="store_true")
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
 	parser.add_argument("--log_dir", default='logs', type=str)
@@ -73,6 +73,10 @@ if __name__ == "__main__":
 	parser.add_argument("--camera_mode", default="Perspective", type=str)
 	parser.add_argument("--bin_mode", default="coarse", choices=["coarse", "naive"], type=str, help="Naive mode do not get warnings but is slower.")
 	parser.add_argument("--num_points", default=500000, type=int)	
+	parser.add_argument("--num_interior_points", default=10000, type=int)	
+	parser.add_argument("--faces_per_pixel", default=1, type=int)
+	parser.add_argument("--get_interior_points", action="store_true")
+
 	args = parser.parse_args()
 
 	os.makedirs(args.log_dir, exist_ok=True)

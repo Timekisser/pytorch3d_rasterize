@@ -39,11 +39,13 @@ class PointCloudRender(torch.nn.Module):
 
 		self.renderer = self.get_renderer()
 		self.full_transform = None
+		self.cameras = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
 		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
-		os.makedirs(self.image_dir, exist_ok=True)
-		os.makedirs(self.pointcloud_dir, exist_ok=True)
+		self.interior_dir = os.path.join(output_dir, "interior")
+		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
+			os.makedirs(dir, exist_ok=True)
 
 	def get_transform(self, cameras):
 
@@ -64,9 +66,9 @@ class PointCloudRender(torch.nn.Module):
 		# and image size
 		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
 		if self.args.camera_mode == "Perspective":
-			cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
+			self.cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
 		elif self.args.camera_mode == "Orthographic":
-			cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
+			self.cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
 		else:
 			raise Exception("No such camera mode.")
 
@@ -75,18 +77,18 @@ class PointCloudRender(torch.nn.Module):
 		raster_settings = RasterizationSettings(
 			image_size=self.image_size,
 			blur_radius=0.0,
-			faces_per_pixel=1,
+			faces_per_pixel=self.args.faces_per_pixel,
 			bin_size=None if self.args.bin_mode == "coarse" else 0,
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizer(
-			cameras=cameras,
+			cameras=self.cameras,
 			raster_settings=raster_settings
 		)
 		# The textured phong shader interpolates the texture uv coordinates for
 		# each vertex, and samples from a texture image.
 		# lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
-		shader = SoftPhongShader(cameras=cameras, device=self.device)
+		shader = SoftPhongShader(cameras=self.cameras, device=self.device)
 		# Create a mesh renderer by composing a rasterizer and a shader
 		renderer = MeshRenderer(rasterizer, shader)
 		return renderer
@@ -108,31 +110,32 @@ class PointCloudRender(torch.nn.Module):
 			plt.savefig(filename_png)
 			plt.cla()
 
-	def gen_pointcloud(self, meshes, fragments, images, uid):
+	def get_pixel_data(self, meshes, fragments, image):
 		verts = meshes.verts_packed()  # (N, V, 3)
 		faces = meshes.faces_packed()  # (N, F, 3)
 		# texels = meshes.sample_textures(fragments)
 		vertex_normals = meshes.verts_normals_packed()  # (N, V, 3)
 		faces_verts = verts[faces]
 		faces_normals = vertex_normals[faces]
-		valid_x, valid_y = torch.where(fragments.zbuf != -1)[1:3]
 		pixel_coords_in_camera = interpolate_face_attributes(
 			fragments.pix_to_face, fragments.bary_coords, faces_verts
 		)
 		pixel_normals = interpolate_face_attributes(
 			fragments.pix_to_face, fragments.bary_coords, faces_normals
 		)
-		pixel_coords = pixel_coords_in_camera[:, valid_x, valid_y, 0] # (N, P, 3)
-		pixel_normals = pixel_normals[:, valid_x, valid_y, 0]	# (N, P, 3)
-		pixel_colors = images[:, valid_x, valid_y, :]	# (N, P, 4)
+		return pixel_coords_in_camera, pixel_normals
 
-		N, P = pixel_coords.shape[0], pixel_coords.shape[1]
-		random_indices = torch.randint(0, N * P, (self.num_points, ), device=self.device)
-		rows = random_indices // P
-		cols = random_indices % P
-		points = pixel_coords[rows, cols]
-		normals = pixel_normals[rows, cols]
-		colors = pixel_colors[rows, cols]
+	def gen_pointcloud(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
+		valid_v, valid_x, valid_y = torch.where(fragments.pix_to_face[:, :, :, 0] != -1)
+		pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, 0] # (P, 3)
+		pixel_normals = pixel_normals[valid_v, valid_x, valid_y, 0]	# (P, 3)
+		pixel_colors = images[valid_v, valid_x, valid_y, :]	# (P, 4)
+
+		P = pixel_coords.shape[0]
+		random_indices = torch.randperm(P, device=self.device)[:self.num_points]
+		points = pixel_coords[random_indices]
+		normals = pixel_normals[random_indices]
+		colors = pixel_colors[random_indices]
 
 		points = points.cpu().numpy()
 		normals = normals.cpu().numpy()
@@ -150,6 +153,36 @@ class PointCloudRender(torch.nn.Module):
 		if "npz" in self.args.save_file_type:
 			np.savez(filename_npy, points=points, normals=normals, colors=colors)
 
+	def gen_interior_points(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
+		pix_to_face = fragments.pix_to_face
+		V, H, W, F = pix_to_face.shape
+		valid_v, valid_x, valid_y, first_valid_f = torch.where(pix_to_face[:, :, :, :1] != -1)
+		last_pix_to_face = torch.cat([pix_to_face, -1 * torch.ones((V, H, W, 1), device=self.device)], dim=-1)
+		last_valid_f = torch.argmin(last_pix_to_face, dim=-1)[valid_v, valid_x, valid_y] - 1
+
+		first_pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, first_valid_f] # (P, 3)
+		last_pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, last_valid_f] # (P, 3)
+
+
+		P = first_pixel_coords.shape[0]
+		random_indices = torch.randperm(P, device=self.device)[:self.args.num_interior_points]
+		random_distances = torch.rand((self.args.num_interior_points, 1), device=self.device)
+
+		points = first_pixel_coords[random_indices] * random_distances + last_pixel_coords[random_indices] * (1 - random_distances)
+
+		points = points.cpu().numpy()
+
+		pointcloud = trimesh.points.PointCloud(vertices=points)
+		save_dir = os.path.join(self.interior_dir, uid)
+		print("Saved interior pointcloud as " + str(save_dir), flush=True)
+		os.makedirs(save_dir, exist_ok=True)
+		filename_ply = os.path.join(save_dir, "interior.ply")
+		filename_npy = os.path.join(save_dir, "interior.npz")
+
+		if "ply" in self.args.save_file_type:
+			pointcloud.export(filename_ply, file_type="ply")
+		if "npz" in self.args.save_file_type:
+			np.savez(filename_npy, points=points)	
 
 	def forward(self, batch):
 		# TODO: render by a batch
@@ -164,4 +197,8 @@ class PointCloudRender(torch.nn.Module):
 			if "png" in self.args.save_file_type:
 				self.gen_image(images, uid)
 
-			self.gen_pointcloud(meshes, fragments, images, uid)
+			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
+			
+			self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			if self.args.get_interior_points:
+				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
