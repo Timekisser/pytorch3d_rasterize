@@ -28,8 +28,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		self.temp_dir = self.output_dir
 
 	def get_geometry(self, filename_obj):
-		scene = trimesh.load(filename_obj)
-		geometry = trimesh.util.concatenate(scene.dump())
+		geometry = trimesh.load(filename_obj, force="mesh")
+		# geometry = trimesh.util.concatenate(scene.dump())
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
@@ -127,7 +127,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		scale = 2.0 / (bbmax - bbmin).max()
 		geometry.vertices = (vertices - center) * scale
 
-		self.gen_points(geometry, filename)
+		# self.gen_points(geometry, filename)
 
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
@@ -153,8 +153,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		filename_pts = os.path.join(self.pointcloud_dir, uid, "pointcloud.npz")
-		if self.args.resume and os.path.exists(filename_pts):
+		filename_interior = os.path.join(self.output_dir, "interior", uid, "interior.npz")
+		if self.args.resume and os.path.exists(filename_interior):
 			print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:

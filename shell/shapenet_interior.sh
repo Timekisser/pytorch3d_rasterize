@@ -15,6 +15,6 @@ main.py \
 --num_points 100000 \
 --get_interior_points \
 --num_interior_points 50000 \
---faces_per_pixel 5 \
+--faces_per_pixel 3 \
 --save_file_type "ply" "npz" # "png" "glb", "obj"
 
