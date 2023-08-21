@@ -11,32 +11,28 @@ from tqdm import tqdm
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
-	Textures,
 	TexturesUV,
 	TexturesVertex,
 )
 
-from dataset.filelist import FileList
 
-
-class ObjaverseDataset(torch.utils.data.Dataset):
+class ShapeNetDataset(torch.utils.data.Dataset):
 	def __init__(self, args):
-		super(ObjaverseDataset, self).__init__()
+		super(ShapeNetDataset, self).__init__()
 		self.args = args
 		self.device = args.device
-		self.filelist = FileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir)
-		self.temp_dir = args.output_dir
+		self.output_dir = args.output_dir
+		self.filelist = ShapeNetFileList(args, args.total_uid_counts, self.output_dir)
+		self.mesh_dir = os.path.join(self.output_dir, 'ShapeNetCore.v1')
+		self.pointcloud_dir = os.path.join(self.output_dir, 'pointcloud2')
+		self.temp_dir = self.output_dir
 
 	def get_geometry(self, filename_obj):
 		scene = trimesh.load(filename_obj)
-		# with open(filename_obj, "rb") as f:
-		# 	scene = trimesh.exchange.gltf.load_glb(f)
 		geometry = trimesh.util.concatenate(scene.dump())
-		valid = True
+		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
-		else:
-			valid = False
 		return geometry, valid
 
 	def get_textures(self, visual, verts, faces):
@@ -70,48 +66,90 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			textures = TexturesVertex(vert_colors)
 		return textures, valid
 
-	def load_mesh(self, filename_obj):
-		if "glb" in self.args.save_file_type:
-			self.copy_glb(filename_obj)
+	def barycentric_interpolation(self, points, values, interp_points):
+		# 计算重心坐标
+		v0 = interp_points - points[:, 0, :]
+		v1 = interp_points - points[:, 1, :]
+		v2 = interp_points - points[:, 2, :] 
+
+		s0 = np.linalg.norm(np.cross(v1, v2, axis=1), axis=1)
+		s1 = np.linalg.norm(np.cross(v2, v0, axis=1), axis=1)
+		s2 = np.linalg.norm(np.cross(v0, v1, axis=1), axis=1)
 		
+		S = s0 + s1 + s2
+		w0 = (s0 / S)[:, None]
+		w1 = (s1 / S)[:, None]
+		w2 = (s2 / S)[:, None]
+
+		# 计算插值值
+		interp_values = w0 * values[:, 0, :] + w1 * values[:, 1, :] + w2 * values[:, 2, :]
+
+		return interp_values
+
+	def gen_points(self, geometry, filename):
+		filename_pts = os.path.join(self.pointcloud_dir, filename, 'pointcloud.npz')
+		filename_ply = os.path.join(self.pointcloud_dir, filename, 'pointcloud.ply')
+		os.makedirs(os.path.dirname(filename_pts), exist_ok=True)
+
+		points, face_idx = trimesh.sample.sample_surface(geometry, self.args.num_points)
+		normals = geometry.face_normals[face_idx]
+		visual = geometry.visual
+		material = visual.material
+		if isinstance(material, trimesh.visual.material.SimpleMaterial):
+			if material.image is not None:
+				vertex_colors = material.to_color(visual.uv)  # (N, 3)
+				faces = geometry.faces[face_idx]              # (F, 3)
+				face_to_vertex = geometry.vertices[faces]     # (F, 3, 3)
+				face_vertex_color = vertex_colors[faces]      # (F, 3, 4)
+				colors = self.barycentric_interpolation(face_to_vertex, face_vertex_color, points)
+				colors = colors[..., :3] / 255.0
+			else:
+				colors = np.tile(material.main_color.reshape(1, -1), (points.shape[0], 1))
+		else:
+			raise Exception("Colors Error!")
+		
+		if "ply" in self.args.save_file_type:
+			pointcloud = trimesh.PointCloud(vertices=points, colors=colors)
+			pointcloud.export(filename_ply, file_type="ply")
+		if "npz" in self.args.save_file_type:
+			np.savez(filename_pts, points=points.astype(np.float16), normals=normals.astype(np.float16), colors=colors.astype(np.float16))
+
+	def load_mesh(self, filename):
+		filename_obj = os.path.join(self.mesh_dir, filename,  'model.obj')		
 		geometry, valid = self.get_geometry(filename_obj)
 		if not valid:
 			print("Invalid geometry type.", flush=True)
 			return None, valid
+
+		vertices = geometry.vertices
+		bbmin, bbmax = vertices.min(0), vertices.max(0)
+		center = (bbmin + bbmax) * 0.5
+		scale = 2.0 / (bbmax - bbmin).max()
+		geometry.vertices = (vertices - center) * scale
+
+		self.gen_points(geometry, filename)
+
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
 
-		verts = mesh.verts_packed()
-		center = verts.mean(0)
-		scale = max((verts - center).abs().max(0)[0])
-		mesh.offset_verts_(-center)
-		mesh.scale_verts_((1.0 / float(scale)))
-
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
 		if "obj" in self.args.save_file_type:
-			self.save_obj(filename_obj, geometry)
+			self.save_obj(filename, geometry, mesh)
 		return mesh, valid
 
-	def copy_glb(self, filename_obj):
-		filename = os.path.basename(filename_obj)[:-4]
+
+	def save_obj(self, filename, geometry, mesh):
 		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
 		os.makedirs(save_dir, exist_ok=True)
-		shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
-
-
-	def save_obj(self, filename_obj, geometry):
-		filename = os.path.basename(filename_obj)[:-4]
-		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
-		os.makedirs(save_dir, exist_ok=True)
-		trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		# IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+		# trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+		IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
-		return len(self.filelist.glbs)
+		return len(self.filelist.uids)
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
@@ -120,7 +158,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
-			mesh, valid = self.load_mesh(self.filelist.glbs[uid])
+			mesh, valid = self.load_mesh(uid)
 		return {
 			"mesh": mesh,
 			"uid": uid,
@@ -129,3 +167,18 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 
 	def collect_fn(self, batch):
 		return batch
+
+class ShapeNetFileList:
+	def __init__(self, args, total_uid_counts=10, shapenet_dir="data/ShapeNet"):
+		self.args = args
+		self.total_uid_counts = total_uid_counts
+		self.shapenet_dir = shapenet_dir
+		self.uids = self.get_filenames("all.txt")
+
+
+	def get_filenames(self, filelist):
+		filelist = os.path.join(self.shapenet_dir, 'filelist', filelist)
+		with open(filelist, 'r') as fid:
+			lines = fid.readlines()
+		filenames = [line.split()[0] for line in lines]
+		return filenames

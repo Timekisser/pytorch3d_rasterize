@@ -16,14 +16,12 @@ from pytorch3d.renderer import (
 	TexturesVertex,
 )
 
-from dataset.filelist import FileList
-
 class ObjaverseDataset(torch.utils.data.Dataset):
 	def __init__(self, args):
 		super(ObjaverseDataset, self).__init__()
 		self.args = args
 		self.device = args.device
-		self.filelist = FileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir)
+		self.filelist = ObjaverseFileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir)
 		self.temp_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
@@ -130,29 +128,57 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		return batch
 
 
-class DataPreFetcher:
+class ObjaverseFileList:
+	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse", output_dir="data/Objaverse"):
+		self.args = args
+		objaverse._VERSIONED_PATH = objaverse_dir 
+		self.total_uid_counts = total_uid_counts
 
-	def __init__(self, loader, device):
-		self.loader = iter(loader)
-		self.device = device
-		self.next_batch = None
-		self.stream = torch.cuda.Stream()
-		self.preload()
+		self.lvis_annotations = objaverse.load_lvis_annotations()
+		self.object_paths = objaverse._load_object_paths()
+		self.output_dir = output_dir
+		self.base_dir = objaverse_dir
+		self.uids = []
+		self.annotations = []
 
+		self.get_glbs()
+		self.get_filelists()
 
-	def preload(self):
-		try:
-			self.next_batch = next(self.loader)
-		except StopIteration:
-			self.next_batch = None
-			return
-		# with torch.cuda.stream(self.stream):
-		# 	self.to_cuda()
+	def get_glbs(self):
+		self.uids = []
+		all_uids = []
+		if self.args.have_category:
+			for category, cat_uids in self.lvis_annotations.items():
+				all_uids += cat_uids
+		else:
+			all_uids = objaverse.load_uids()
 
-	def next(self):
-		torch.cuda.current_stream().wait_stream(self.stream)
-		batch = self.next_batch
-		# if batch is not None:
-			# self.next_batch.record_stream(torch.cuda.current_stream())
-		self.preload()
-		return batch
+		for uid in tqdm(all_uids):
+			filepath = self.object_paths[uid]
+			full_path = os.path.join(self.base_dir, filepath)
+			if os.path.exists(full_path):
+				self.uids.append(uid)
+			if len(self.uids) >= self.total_uid_counts:
+				break
+		# self.annotations = objaverse.load_annotations(self.uids)
+		processes = 1 #mp.cpu_count()
+		self.glbs = objaverse.load_objects(self.uids, processes)
+
+	def get_filelists(self):
+		root_folder = self.output_dir
+		glb_length = len(self.glbs)
+		train_length = int(glb_length)
+		filelist_folder = os.path.join(root_folder, 'filelist')
+		if not os.path.exists(filelist_folder):
+			os.makedirs(filelist_folder)
+		train_list = os.path.join(filelist_folder, 'all.txt')
+		# eval_list = os.path.join(filelist_folder, 'val.txt')
+		filenames = list(self.glbs.keys())
+		with open(train_list, "w") as f:
+			for filename in filenames[:train_length]:
+				f.write(filename)
+				f.write('\n')
+		# with open(eval_list, "w") as f:
+		# 	for filename in filenames[train_length:]:
+		# 		f.write(filename)
+		# 		f.write('\n')

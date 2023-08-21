@@ -10,6 +10,7 @@ torchrun \
 --nproc_per_node=${N_GPUS} \
 main.py \
 --resume \
+--get_render_points \
 --objaverse_dir ${objaverse_dir} \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \

@@ -198,7 +198,8 @@ class PointCloudRender(torch.nn.Module):
 				self.gen_image(images, uid)
 
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
-			
-			self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+
+			if self.args.get_render_points:	
+				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
 			if self.args.get_interior_points:
 				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
