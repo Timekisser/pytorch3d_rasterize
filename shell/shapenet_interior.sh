@@ -8,6 +8,7 @@ torchrun \
 --nproc_per_node=${N_GPUS} \
 main.py \
 --resume \
+--dataset "ShapeNet" \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \
 --num_workers 8 \
