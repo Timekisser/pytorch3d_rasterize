@@ -165,7 +165,7 @@ class PointCloudRender(torch.nn.Module):
 
 
 		P = first_pixel_coords.shape[0]
-		random_indices = torch.randperm(P, device=self.device)[:self.args.num_interior_points]
+		random_indices = torch.randint(0, P, size=(self.args.num_interior_points, ), device=self.device)
 		random_distances = torch.rand((self.args.num_interior_points, 1), device=self.device)
 
 		points = first_pixel_coords[random_indices] * random_distances + last_pixel_coords[random_indices] * (1 - random_distances)
@@ -189,7 +189,6 @@ class PointCloudRender(torch.nn.Module):
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
-				# print(f"Mesh {uid} is not valid.", flush=True)
 				continue
 			print(f"Start render pointcloud of {uid}", flush=True)
 			meshes = mesh.extend(self.num_views)

@@ -53,7 +53,17 @@ def generate_pointcloud(args):
 	# for i in range(len(data_loader)):
 	for batch in data_loader:
 		mesh_to_cuda(batch, model.device)
-		model(batch)
+		# try:
+		with torch.no_grad():
+			model(batch)
+		# except:
+			# import traceback
+			# print(traceback.format_exc())
+		if torch.cuda.is_available():
+			gpu_memory = torch.cuda.memory_reserved(device=None) / (2**30)
+			gpu_info = ', memory: {:.3f}GB'.format(gpu_memory)
+			print(gpu_info)
+		torch.cuda.empty_cache()
 		# batch = fetcher.next()
 
 if __name__ == "__main__":
