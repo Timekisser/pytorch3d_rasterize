@@ -3,7 +3,6 @@ import torch.nn
 import numpy as np
 import os
 import trimesh
-import sys
 import matplotlib.pyplot as plt
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
@@ -22,7 +21,7 @@ from pytorch3d.renderer import (
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=256, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=1024, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -37,10 +36,10 @@ class PointCloudRender(torch.nn.Module):
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
 
-		self.renderer = self.get_renderer(bin_size=None if args.bin_mode == "coarse" else 0)
-		self.high_renderer = self.get_renderer(bin_size=1024)
+		self.cameras = self.get_cameras()
+		self.rasterizer = None
+		self.shader = self.get_shader()
 		self.full_transform = None
-		self.cameras = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
 		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
@@ -62,19 +61,19 @@ class PointCloudRender(torch.nn.Module):
 			full_transform = cameras.get_full_projection_transform()
 		return full_transform
 
-	def get_renderer(self, bin_size=None):
+	def get_cameras(self):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
 		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
 		if self.args.camera_mode == "Perspective":
-			self.cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
+			cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
 		elif self.args.camera_mode == "Orthographic":
-			self.cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
+			cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
 		else:
 			raise Exception("No such camera mode.")
+		return cameras
 
-		# self.transform = self.get_transform(cameras)
-
+	def get_rasterizer(self, bin_size):
 		raster_settings = RasterizationSettings(
 			image_size=self.image_size,
 			blur_radius=0.0,
@@ -86,21 +85,32 @@ class PointCloudRender(torch.nn.Module):
 			cameras=self.cameras,
 			raster_settings=raster_settings
 		)
+		return rasterizer
+
+	def get_shader(self):
 		# The textured phong shader interpolates the texture uv coordinates for
 		# each vertex, and samples from a texture image.
 		# lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
 		shader = SoftPhongShader(cameras=self.cameras, device=self.device)
 		# Create a mesh renderer by composing a rasterizer and a shader
-		renderer = MeshRenderer(rasterizer, shader)
-		return renderer
-
-	def render(self, meshes):
-		if meshes._F <= 1000000:
-			renderer = self.renderer
+		return shader
+	
+	def get_bin_size(self, meshes):
+		bin_size_face = int(2 ** np.floor(np.log2(meshes._F // 6) - 10))
+		bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
+		bin_size = max(bin_size_face, bin_size_image)
+		return bin_size
+	
+	def render(self, meshes, uid):
+		if self.args.bin_mode == "naive":
+			self.rasterizer = self.get_rasterizer(bin_size=0)
 		else:
-			renderer = self.high_renderer
-		fragments = renderer.rasterizer(meshes)
-		images = renderer.shader(fragments, meshes)
+			bin_size = self.get_bin_size(meshes)
+			self.rasterizer = self.get_rasterizer(bin_size)
+			print(f"Bin size: {bin_size} Face: {meshes._F // 6} uid: {uid}", flush=True)
+			
+		fragments = self.rasterizer(meshes)
+		images = self.shader(fragments, meshes)
 		return fragments, images
 
 	def gen_image(self, images, uid):
@@ -197,7 +207,7 @@ class PointCloudRender(torch.nn.Module):
 				continue
 			print(f"Start render pointcloud of {uid}", flush=True)
 			meshes = mesh.extend(self.num_views)
-			fragments, images = self.render(meshes)
+			fragments, images = self.render(meshes, uid)
 			if "png" in self.args.save_file_type:
 				self.gen_image(images, uid)
 

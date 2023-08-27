@@ -25,6 +25,9 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		self.temp_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
+		if self.args.debug and os.path.getsize(filename_obj) > 100 * 1024 * 1024:
+			# skip large mesh
+			return None, False
 		try:
 			scene = trimesh.load(filename_obj)
 		except:
@@ -72,7 +75,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		
 		geometry, valid = self.get_geometry(filename_obj)
 		if not valid:
-			print("Invalid geometry type.", flush=True)
+			print("Invalid geometry.", flush=True)
 			return None, valid
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
@@ -152,7 +155,10 @@ class ObjaverseFileList:
 		else:
 			all_uids = objaverse.load_uids()
 
-		for uid in tqdm(all_uids[1830:1900]):
+		if self.args.debug:
+			all_uids = all_uids[2260:]
+
+		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
 			full_path = os.path.join(self.base_dir, filepath)
 			if os.path.exists(full_path):
