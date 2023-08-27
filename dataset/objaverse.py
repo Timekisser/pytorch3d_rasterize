@@ -25,17 +25,16 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		self.temp_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
-		scene = trimesh.load(filename_obj)
-		# with open(filename_obj, "rb") as f:
-		# 	scene = trimesh.exchange.gltf.load_glb(f)
+		try:
+			scene = trimesh.load(filename_obj)
+		except:
+			return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
-		valid = True
 		if isinstance(geometry, trimesh.Trimesh):
-			valid = True
+			return geometry, True
 		else:
-			valid = False
-		return geometry, valid
-
+			return None, False
+	
 	def get_textures(self, visual, verts, faces):
 		material = visual.material
 		# TODO: whether the mesh is valid
@@ -76,7 +75,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			print("Invalid geometry type.", flush=True)
 			return None, valid
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
-		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
+		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
 
@@ -153,7 +152,7 @@ class ObjaverseFileList:
 		else:
 			all_uids = objaverse.load_uids()
 
-		for uid in tqdm(all_uids):
+		for uid in tqdm(all_uids[1100:1200]):
 			filepath = self.object_paths[uid]
 			full_path = os.path.join(self.base_dir, filepath)
 			if os.path.exists(full_path):
