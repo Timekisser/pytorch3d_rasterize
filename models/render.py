@@ -96,7 +96,7 @@ class PointCloudRender(torch.nn.Module):
 		return shader
 	
 	def get_bin_size(self, meshes):
-		bin_size_face = int(2 ** np.floor(np.log2(meshes._F // 6) - 10))
+		bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 8))
 		bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
 		bin_size = max(bin_size_face, bin_size_image)
 		return bin_size
@@ -212,8 +212,10 @@ class PointCloudRender(torch.nn.Module):
 				self.gen_image(images, uid)
 
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
-
-			if self.args.get_render_points:	
-				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-			if self.args.get_interior_points:
-				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			try:
+				if self.args.get_render_points:	
+					self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+				if self.args.get_interior_points:
+					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			except:
+				print("Generate pointcloud error:", uid)

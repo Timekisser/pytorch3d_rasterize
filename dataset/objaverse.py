@@ -156,7 +156,7 @@ class ObjaverseFileList:
 			all_uids = objaverse.load_uids()
 
 		if self.args.debug:
-			all_uids = all_uids[2260:]
+			all_uids = all_uids[26153:]
 
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
