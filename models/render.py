@@ -22,7 +22,7 @@ from pytorch3d.renderer import (
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=1024, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=256, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -37,7 +37,8 @@ class PointCloudRender(torch.nn.Module):
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
 
-		self.renderer = self.get_renderer()
+		self.renderer = self.get_renderer(bin_size=None if args.bin_mode == "coarse" else 0)
+		self.high_renderer = self.get_renderer(bin_size=1024)
 		self.full_transform = None
 		self.cameras = None
 		# Output dir
@@ -61,7 +62,7 @@ class PointCloudRender(torch.nn.Module):
 			full_transform = cameras.get_full_projection_transform()
 		return full_transform
 
-	def get_renderer(self):
+	def get_renderer(self, bin_size=None):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
 		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
@@ -78,7 +79,7 @@ class PointCloudRender(torch.nn.Module):
 			image_size=self.image_size,
 			blur_radius=0.0,
 			faces_per_pixel=self.args.faces_per_pixel,
-			bin_size=None if self.args.bin_mode == "coarse" else 0,
+			bin_size=bin_size,
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizer(
@@ -94,8 +95,12 @@ class PointCloudRender(torch.nn.Module):
 		return renderer
 
 	def render(self, meshes):
-		fragments = self.renderer.rasterizer(meshes)
-		images = self.renderer.shader(fragments, meshes)
+		if meshes._F <= 1000000:
+			renderer = self.renderer
+		else:
+			renderer = self.high_renderer
+		fragments = renderer.rasterizer(meshes)
+		images = renderer.shader(fragments, meshes)
 		return fragments, images
 
 	def gen_image(self, images, uid):

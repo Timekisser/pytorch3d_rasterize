@@ -152,7 +152,7 @@ class ObjaverseFileList:
 		else:
 			all_uids = objaverse.load_uids()
 
-		for uid in tqdm(all_uids[1100:1200]):
+		for uid in tqdm(all_uids[1830:1900]):
 			filepath = self.object_paths[uid]
 			full_path = os.path.join(self.base_dir, filepath)
 			if os.path.exists(full_path):
