@@ -28,10 +28,10 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		if self.args.debug and os.path.getsize(filename_obj) > 100 * 1024 * 1024:
 			# skip large mesh
 			return None, False
-		try:
-			scene = trimesh.load(filename_obj)
-		except:
-			return None, False
+		# try:
+		scene = trimesh.load(filename_obj)
+		# except:
+			# return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
 		if isinstance(geometry, trimesh.Trimesh):
 			return geometry, True
@@ -155,8 +155,8 @@ class ObjaverseFileList:
 		else:
 			all_uids = objaverse.load_uids()
 
-		if self.args.debug:
-			all_uids = all_uids[26153:]
+		# if self.args.debug:
+		# 	all_uids = all_uids[26153:]
 
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]

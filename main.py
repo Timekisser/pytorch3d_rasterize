@@ -59,10 +59,7 @@ def generate_pointcloud(args):
 		# except:
 			# import traceback
 			# print(traceback.format_exc())
-		if torch.cuda.is_available():
-			gpu_memory = torch.cuda.memory_reserved(device=None) / (2**30)
-			gpu_info = 'memory: {:.3f}GB'.format(gpu_memory)
-			print(gpu_info)
+
 		torch.cuda.empty_cache()
 		# batch = fetcher.next()
 

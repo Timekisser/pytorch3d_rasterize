@@ -171,19 +171,19 @@ class PointCloudRender(torch.nn.Module):
 	def gen_interior_points(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
 		pix_to_face = fragments.pix_to_face
 		V, H, W, F = pix_to_face.shape
-		valid_v, valid_x, valid_y, first_valid_f = torch.where(pix_to_face[:, :, :, :1] != -1)
-		last_pix_to_face = torch.cat([pix_to_face, -1 * torch.ones((V, H, W, 1), device=self.device)], dim=-1)
-		last_valid_f = torch.argmin(last_pix_to_face, dim=-1)[valid_v, valid_x, valid_y] - 1
+		valid_pixel_coords = []
+		for face_id in range(0, F, 2):
+			first_valid = pix_to_face[:, :, :, face_id] != -1
+			last_valid = pix_to_face[:, :, :, face_id+1] != -1
+			valid = torch.logical_and(first_valid, last_valid)
+			valid_pixel_coords.append(pixel_coords_in_camera[valid][:, face_id:face_id+2, :])
 
-		first_pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, first_valid_f] # (P, 3)
-		last_pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, last_valid_f] # (P, 3)
-
-
-		P = first_pixel_coords.shape[0]
+		valid_pixel_coords = torch.cat(valid_pixel_coords, dim=0)
+		P = valid_pixel_coords.shape[0]
 		random_indices = torch.randint(0, P, size=(self.args.num_interior_points, ), device=self.device)
 		random_distances = torch.rand((self.args.num_interior_points, 1), device=self.device)
 
-		points = first_pixel_coords[random_indices] * random_distances + last_pixel_coords[random_indices] * (1 - random_distances)
+		points = valid_pixel_coords[random_indices][:, 0, :] * random_distances + valid_pixel_coords[random_indices][:, 1, :] * (1 - random_distances)
 
 		points = points.cpu().numpy()
 
@@ -212,10 +212,10 @@ class PointCloudRender(torch.nn.Module):
 				self.gen_image(images, uid)
 
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
-			try:
-				if self.args.get_render_points:	
-					self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-				if self.args.get_interior_points:
-					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-			except:
-				print("Generate pointcloud error:", uid)
+			# try:
+			if self.args.get_render_points:	
+				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			if self.args.get_interior_points:
+				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			# except:
+				# print("Generate pointcloud error:", uid)
