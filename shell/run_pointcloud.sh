@@ -10,7 +10,6 @@ torchrun \
 --nproc_per_node=${N_GPUS} \
 main.py \
 --resume \
---debug \
 --get_render_points \
 --objaverse_dir ${objaverse_dir} \
 --output_dir ${output_dir} \
@@ -18,5 +17,5 @@ main.py \
 --num_workers 8 \
 --total_uid_counts 8000000 \
 --num_points 500000 \
---save_file_type "ply" "png" "npz" #, "glb", "obj"
-
+--save_file_type "ply" "png" "npz" \
+# --debug
