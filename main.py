@@ -6,6 +6,7 @@ from torch.utils.data.sampler import BatchSampler, SequentialSampler
 import argparse
 import os
 import sys
+from tqdm import tqdm
 from dataset.objaverse import ObjaverseDataset
 from dataset.shapenet import ShapeNetDataset
 from dataset.prefetch import DataPreFetcher 
@@ -51,7 +52,7 @@ def generate_pointcloud(args):
 	# fetcher = DataPreFetcher(data_loader, args.device)
 	# batch = fetcher.next()
 	# for i in range(len(data_loader)):
-	for batch in data_loader:
+	for batch in tqdm(data_loader):
 		mesh_to_cuda(batch, model.device)
 		# try:
 		with torch.no_grad():

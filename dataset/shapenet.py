@@ -173,7 +173,7 @@ class ShapeNetFileList:
 		self.args = args
 		self.total_uid_counts = total_uid_counts
 		self.shapenet_dir = shapenet_dir
-		self.uids = self.get_filenames("all.txt")
+		self.uids = self.get_filenames("train_chair.txt") + self.get_filenames("test_chair.txt")
 
 
 	def get_filenames(self, filelist):

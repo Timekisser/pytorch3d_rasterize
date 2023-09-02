@@ -181,7 +181,7 @@ class PointCloudRender(torch.nn.Module):
 
 		P = first_pixel_coords.shape[0]
 		random_indices = torch.randint(0, P, size=(self.args.num_interior_points, ), device=self.device)
-		random_distances = torch.rand((self.args.num_interior_points, 1), device=self.device)
+		random_distances = torch.rand((self.args.num_interior_points, 1), device=self.device) * 0.9 + 0.05
 
 		points = first_pixel_coords[random_indices] * random_distances + last_pixel_coords[random_indices] * (1 - random_distances)
 
@@ -212,10 +212,7 @@ class PointCloudRender(torch.nn.Module):
 				self.gen_image(images, uid)
 
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
-			try:
-				if self.args.get_render_points:	
-					self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-				if self.args.get_interior_points:
-					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-			except:
-				print("Generate pointcloud error:", uid)
+			if self.args.get_render_points:	
+				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			if self.args.get_interior_points:
+				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
