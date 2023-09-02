@@ -216,3 +216,8 @@ class PointCloudRender(torch.nn.Module):
 				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
 			if self.args.get_interior_points:
 				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+<<<<<<< HEAD
+=======
+			# except:
+				# print("Generate pointcloud error:", uid)
+>>>>>>> 451ee171f77584993d60eba81c8581d813eea0d3

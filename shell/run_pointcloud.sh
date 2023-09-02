@@ -18,4 +18,4 @@ main.py \
 --total_uid_counts 8000000 \
 --num_points 500000 \
 --save_file_type "ply" "png" "npz" \
-# --debug
+--debug
