@@ -27,8 +27,8 @@ class PointCloudRender(torch.nn.Module):
 		self.image_size = image_size
 		self.camera_dist = camera_dist
 		self.batch_size = args.batch_size
-		self.elevation =  [0, 0,  0,   0,   -90, 90]
-		self.azim_angle = [0, 90, 180, 270, 0,   0]
+		self.elevation =  [0, 0,  0,   0,   -90, 90] + [-45, -45, -45, -45, 45, 45,  45,  45]
+		self.azim_angle = [0, 90, 180, 270, 0,   0]  + [45,  135, 225, 315, 45, 135, 225, 315]	
 		self.num_views = len(self.elevation)
 		self.num_points = args.num_points
 		self.device = device
@@ -129,15 +129,14 @@ class PointCloudRender(torch.nn.Module):
 		verts = meshes.verts_packed()  # (N, V, 3)
 		faces = meshes.faces_packed()  # (N, F, 3)
 		# texels = meshes.sample_textures(fragments)
-		vertex_normals = meshes.verts_normals_packed()  # (N, V, 3)
 		faces_verts = verts[faces]
-		faces_normals = vertex_normals[faces]
 		pixel_coords_in_camera = interpolate_face_attributes(
 			fragments.pix_to_face, fragments.bary_coords, faces_verts
 		)
-		pixel_normals = interpolate_face_attributes(
-			fragments.pix_to_face, fragments.bary_coords, faces_normals
-		)
+		faces_normals = meshes.faces_normals_packed()
+		pixel_valid = fragments.pix_to_face != -1
+		pixel_normals = faces_normals[fragments.pix_to_face]
+		pixel_normals[pixel_valid.logical_not()] = 0
 		return pixel_coords_in_camera, pixel_normals
 
 	def gen_pointcloud(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
@@ -150,7 +149,15 @@ class PointCloudRender(torch.nn.Module):
 		random_indices = torch.randperm(P, device=self.device)[:self.num_points]
 		points = pixel_coords[random_indices]
 		normals = pixel_normals[random_indices]
+		normals = normals / torch.norm(normals, p=2, dim=1, keepdim=True)
 		colors = pixel_colors[random_indices]
+
+		# normal directions
+		camera_centers = self.cameras.get_camera_center()
+		camera_centers = camera_centers[valid_v][random_indices]
+		camera_vectors =  camera_centers - points
+		normals_valid = torch.sum(camera_vectors * normals, dim=1) < 0.0
+		normals[normals_valid] = -1.0 * normals[normals_valid]
 
 		points = points.cpu().numpy()
 		normals = normals.cpu().numpy()
@@ -167,6 +174,19 @@ class PointCloudRender(torch.nn.Module):
 			pointcloud.export(filename_ply, file_type="ply")
 		if "npz" in self.args.save_file_type:
 			np.savez(filename_npy, points=points, normals=normals, colors=colors)
+		
+		if self.args.debug:
+			self.visualize_points_and_normals(points, normals, uid)
+	
+	def visualize_points_and_normals(self, points, normals, uid):
+		cameras = self.cameras.get_camera_center().cpu().numpy()
+		points = np.concatenate([points + 0.05 * normals, points, cameras])
+		colors = np.concatenate([np.array([[1, 0, 0]] * self.num_points), np.array([[0, 1, 0]] * self.num_points), np.array([[0, 0, 1]] * self.num_views)]) * 255.0
+		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors)
+		save_dir = os.path.join("mytools/results/", f"{uid}.ply")
+		os.makedirs(os.path.dirname(save_dir), exist_ok=True)
+		pointcloud.export(save_dir, file_type="ply")
+
 
 	def gen_interior_points(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
 		pix_to_face = fragments.pix_to_face
@@ -216,8 +236,3 @@ class PointCloudRender(torch.nn.Module):
 				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
 			if self.args.get_interior_points:
 				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-<<<<<<< HEAD
-=======
-			# except:
-				# print("Generate pointcloud error:", uid)
->>>>>>> 451ee171f77584993d60eba81c8581d813eea0d3

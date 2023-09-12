@@ -90,6 +90,7 @@ if __name__ == "__main__":
 	parser.add_argument("--bin_mode", default="coarse", choices=["coarse", "naive"], type=str, help="Naive mode do not get warnings but is slower.")
 	parser.add_argument("--num_points", default=500000, type=int)	
 	parser.add_argument("--num_interior_points", default=50000, type=int)	
+	parser.add_argument("--points_dilate", default=0.005, type=float)
 	parser.add_argument("--faces_per_pixel", default=1, type=int)
 	parser.add_argument("--get_interior_points", action="store_true")
 	parser.add_argument("--get_render_points", action="store_true")

@@ -173,7 +173,8 @@ class ShapeNetFileList:
 		self.args = args
 		self.total_uid_counts = total_uid_counts
 		self.shapenet_dir = shapenet_dir
-		self.uids = self.get_filenames("train_chair.txt") + self.get_filenames("test_chair.txt")
+		self.filenames = self.get_filenames("train_chair.txt") + self.get_filenames("test_chair.txt")
+		self.uids = self.get_uids()
 
 
 	def get_filenames(self, filelist):
@@ -182,3 +183,15 @@ class ShapeNetFileList:
 			lines = fid.readlines()
 		filenames = [line.split()[0] for line in lines]
 		return filenames
+
+	def get_uids(self):
+		uids = []
+		for filename in self.filenames:
+			if self.args.get_interior_points:
+				filepath = os.path.join(self.shapenet_dir, "interior", filename, "interior.npz")
+			elif self.args.get_render_points:
+				filepath = os.path.join(self.shapenet_dir, "pointcloud", filename, "pointcloud.npz")
+			if self.args.resume == False or os.path.exists(filepath) == False:
+				uids.append(filename)
+		return uids
+
