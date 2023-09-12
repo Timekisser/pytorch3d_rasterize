@@ -133,6 +133,13 @@ class PointCloudRender(torch.nn.Module):
 		pixel_coords_in_camera = interpolate_face_attributes(
 			fragments.pix_to_face, fragments.bary_coords, faces_verts
 		)
+
+		# vertex_normals = meshes.verts_normals_packed()  # (V, 3)
+		# faces_normals = vertex_normals[faces]
+		# pixel_normals = interpolate_face_attributes(
+        # 	fragments.pix_to_face, fragments.bary_coords, faces_normals
+    	# )
+
 		faces_normals = meshes.faces_normals_packed()
 		pixel_valid = fragments.pix_to_face != -1
 		pixel_normals = faces_normals[fragments.pix_to_face]
@@ -156,8 +163,8 @@ class PointCloudRender(torch.nn.Module):
 		camera_centers = self.cameras.get_camera_center()
 		camera_centers = camera_centers[valid_v][random_indices]
 		camera_vectors =  camera_centers - points
-		normals_valid = torch.sum(camera_vectors * normals, dim=1) < 0.0
-		normals[normals_valid] = -1.0 * normals[normals_valid]
+		normals_negative = torch.sum(camera_vectors * normals, dim=1) < 0.0
+		normals[normals_negative] = -1.0 * normals[normals_negative]
 
 		points = points.cpu().numpy()
 		normals = normals.cpu().numpy()
@@ -180,10 +187,10 @@ class PointCloudRender(torch.nn.Module):
 	
 	def visualize_points_and_normals(self, points, normals, uid):
 		cameras = self.cameras.get_camera_center().cpu().numpy()
-		points = np.concatenate([points + 0.05 * normals, points, cameras])
+		points = np.concatenate([points + 0.01 * normals, points, cameras])
 		colors = np.concatenate([np.array([[1, 0, 0]] * self.num_points), np.array([[0, 1, 0]] * self.num_points), np.array([[0, 0, 1]] * self.num_views)]) * 255.0
 		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors)
-		save_dir = os.path.join("mytools/results/", f"{uid}.ply")
+		save_dir = os.path.join(self.pointcloud_dir, uid, f"normals.ply")
 		os.makedirs(os.path.dirname(save_dir), exist_ok=True)
 		pointcloud.export(save_dir, file_type="ply")
 

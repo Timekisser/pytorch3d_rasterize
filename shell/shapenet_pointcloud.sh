@@ -1,8 +1,6 @@
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 N_GPUS=4
-objaverse_dir='/mnt/sdc/weist/objaverse'
-# output_dir='/mnt/sdb/xiongbj/Objaverse'
-output_dir='data/Objaverse'
+output_dir='data/ShapeNet'
 log_dir='logs'
 
 torchrun \
@@ -10,13 +8,14 @@ torchrun \
 --nproc_per_node=${N_GPUS} \
 main.py \
 --get_render_points \
---objaverse_dir ${objaverse_dir} \
+--dataset "ShapeNet" \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \
 --num_workers 8 \
 --total_uid_counts 8000000 \
---num_points 500000 \
+--num_points 100000 \
+--file_list "train_airplane.txt" "test_airplane.txt" \
 --save_file_type "ply" "npz" \
---resume \
-# --debug \
+--debug \
+# --resume \
 ######

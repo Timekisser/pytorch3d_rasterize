@@ -54,12 +54,12 @@ def generate_pointcloud(args):
 	# for i in range(len(data_loader)):
 	for batch in tqdm(data_loader):
 		mesh_to_cuda(batch, model.device)
-		# try:
-		with torch.no_grad():
-			model(batch)
-		# except:
-			# import traceback
-			# print(traceback.format_exc())
+		try:
+			with torch.no_grad():
+				model(batch)
+		except:
+			import traceback
+			print(traceback.format_exc())
 
 		torch.cuda.empty_cache()
 		# batch = fetcher.next()
@@ -79,9 +79,12 @@ if __name__ == "__main__":
 	parser.add_argument("--resume", action="store_true")
 	parser.add_argument("--debug", action="store_true")
 	parser.add_argument("--total_uid_counts", default=8000000, type=int)
-	parser.add_argument("--have_category", action="store_true")
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
+	# Objaverse
+	parser.add_argument("--have_category", action="store_true")
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
+	# ShapeNet
+	parser.add_argument("--file_list", default=["train_airplane.txt", "test_airplane.txt"], type=str, nargs="+")
 	parser.add_argument("--log_dir", default='logs', type=str)
 	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb", "obj"], type=str, nargs="+")
 	
