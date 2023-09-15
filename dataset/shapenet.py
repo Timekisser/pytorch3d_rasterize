@@ -22,10 +22,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		self.args = args
 		self.device = args.device
 		self.output_dir = args.output_dir
-		self.filelist = ShapeNetFileList(args, args.total_uid_counts, self.output_dir)
-		self.mesh_dir = os.path.join(self.output_dir, 'ShapeNetCore.v1')
-		self.pointcloud_dir = os.path.join(self.output_dir, 'pointcloud2')
-		self.temp_dir = self.output_dir
+		self.mesh_dir = args.shapenet_mesh_dir
+		self.filelist = ShapeNetFileList(args, args.total_uid_counts, args.shapenet_filelist_dir)
 
 	def get_geometry(self, filename_obj):
 		geometry = trimesh.load(filename_obj, force="mesh")
@@ -87,8 +85,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		return interp_values
 
 	def gen_points(self, geometry, filename):
-		filename_pts = os.path.join(self.pointcloud_dir, filename, 'pointcloud.npz')
-		filename_ply = os.path.join(self.pointcloud_dir, filename, 'pointcloud.ply')
+		filename_pts = os.path.join(self.output_dir, filename, 'pointcloud.npz')
+		filename_ply = os.path.join(self.output_dir, filename, 'pointcloud.ply')
 		os.makedirs(os.path.dirname(filename_pts), exist_ok=True)
 
 		points, face_idx = trimesh.sample.sample_surface(geometry, self.args.num_points)
@@ -137,16 +135,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
-		if "obj" in self.args.save_file_type:
-			self.save_obj(filename, geometry, mesh)
 		return mesh, valid
-
-
-	def save_obj(self, filename, geometry, mesh):
-		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
-		os.makedirs(save_dir, exist_ok=True)
-		# trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.uids)
@@ -169,18 +158,17 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		return batch
 
 class ShapeNetFileList:
-	def __init__(self, args, total_uid_counts=10, shapenet_dir="data/ShapeNet"):
+	def __init__(self, args, total_uid_counts, shapenet_filelist_dir):
 		self.args = args
 		self.total_uid_counts = total_uid_counts
-		self.shapenet_dir = shapenet_dir
+		self.shapenet_filelist_dir = shapenet_filelist_dir
 		self.filenames = []
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
 
-
 	def get_filenames(self, filelist):
-		filelist = os.path.join(self.shapenet_dir, 'filelist', filelist)
+		filelist = os.path.join(self.shapenet_filelist_dir, filelist)
 		with open(filelist, 'r') as fid:
 			lines = fid.readlines()
 		filenames = [line.split()[0] for line in lines]
@@ -190,9 +178,9 @@ class ShapeNetFileList:
 		uids = []
 		for filename in self.filenames:
 			if self.args.get_interior_points:
-				filepath = os.path.join(self.shapenet_dir, "interior", filename, "interior.npz")
+				filepath = os.path.join(self.shapenet_filelist_dir, "interior", filename, "interior.npz")
 			elif self.args.get_render_points:
-				filepath = os.path.join(self.shapenet_dir, "pointcloud", filename, "pointcloud.npz")
+				filepath = os.path.join(self.shapenet_filelist_dir, "pointcloud", filename, "pointcloud.npz")
 			if self.args.resume == False or os.path.exists(filepath) == False:
 				uids.append(filename)
 		return uids

@@ -9,13 +9,16 @@ torchrun \
 main.py \
 --get_render_points \
 --dataset "ShapeNet" \
---output_dir ${output_dir} \
+--shapenet_mesh_dir "data/ShapeNet/ShapeNetCore.v1" \
+--shapenet_filelist_dir "data/ShapeNet/filelist" \
+--output_dir "data/ShapeNet/pointcloud" \
 --log_dir ${log_dir} \
 --num_workers 8 \
 --total_uid_counts 8000000 \
---num_points 100000 \
+--num_points 200000 \
 --file_list "train_airplane.txt" "test_airplane.txt" \
 --save_file_type "ply" "npz" \
---debug \
+# --debug \
 # --resume \
+# --camera_mode "Orthographic" \
 ######

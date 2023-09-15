@@ -15,7 +15,6 @@ from utils.distributed import (
     get_rank,
     synchronize,
 )
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 def build_dataloader(args):
 	if args.dataset == "Objaverse":
 		dataset = ObjaverseDataset(args)
@@ -83,7 +82,10 @@ if __name__ == "__main__":
 	# Objaverse
 	parser.add_argument("--have_category", action="store_true")
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
+
 	# ShapeNet
+	parser.add_argument("--shapenet_mesh_dir", default="data/ShapeNet/ShapeNetCore.v1/", type=str)
+	parser.add_argument("--shapenet_filelist_dir", default="data/ShapeNet/filelist", type=str)
 	parser.add_argument("--file_list", default=["train_airplane.txt", "test_airplane.txt"], type=str, nargs="+")
 	parser.add_argument("--log_dir", default='logs', type=str)
 	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb", "obj"], type=str, nargs="+")
