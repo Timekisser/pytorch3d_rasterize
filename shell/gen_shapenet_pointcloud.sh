@@ -16,9 +16,10 @@ main.py \
 --num_workers 8 \
 --total_uid_counts 8000000 \
 --num_points 200000 \
+--bin_mode "naive" \
 --file_list "train_airplane.txt" "test_airplane.txt" \
---save_file_type "pointcloud" "data" \
---resume \
-# --debug \
+--save_file_type "pointcloud" "data" "normal" \
+--debug \
+# --resume \
 # --camera_mode "Orthographic" \
 ######

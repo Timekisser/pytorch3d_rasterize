@@ -74,13 +74,19 @@ class PointCloudRender(torch.nn.Module):
 		return cameras
 
 	def get_bin_size(self, meshes):
-		bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 12))
-		bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
-		bin_size = max(bin_size_face, bin_size_image)
+		if self.args.bin_mode == "coarse":
+			# bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 12))
+			bin_size = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
+			# bin_size = max(bin_size_face, bin_size_image)
+		else:
+			bin_size = 0
 		return bin_size
 	
 	def get_max_faces_per_bin(self, meshes):
-		max_faces_per_bin = int(meshes._F * 0.8)
+		if self.args.bin_mode == "coarse":
+			max_faces_per_bin = int(meshes._F * 0.9)
+		else:
+			max_faces_per_bin = None
 		return max_faces_per_bin
 
 	def get_rasterizer(self, meshes):
@@ -107,10 +113,7 @@ class PointCloudRender(torch.nn.Module):
 		return shader
 	
 	def render(self, meshes, uid):
-		if self.args.bin_mode == "naive":
-			self.rasterizer = self.get_rasterizer(bin_size=0)
-		else:
-			self.rasterizer = self.get_rasterizer(meshes)
+		self.rasterizer = self.get_rasterizer(meshes)
 
 		fragments = self.rasterizer(meshes)
 		# colors = meshes.textures.sample_textures(fragments)
