@@ -6,6 +6,7 @@ from torch.utils.data.sampler import BatchSampler, SequentialSampler
 import argparse
 import os
 import sys
+import traceback
 from tqdm import tqdm
 from dataset.objaverse import ObjaverseDataset
 from dataset.shapenet import ShapeNetDataset
@@ -15,6 +16,7 @@ from utils.distributed import (
     get_rank,
     synchronize,
 )
+os.environ['CUDA_LAUNCH_BLOCKING']='1'
 def build_dataloader(args):
 	if args.dataset == "Objaverse":
 		dataset = ObjaverseDataset(args)
@@ -53,13 +55,19 @@ def generate_pointcloud(args):
 	# for i in range(len(data_loader)):
 	for batch in tqdm(data_loader):
 		mesh_to_cuda(batch, model.device)
-		try:
-			with torch.no_grad():
-				model(batch)
-		except:
-			import traceback
-			print(traceback.format_exc())
-
+		if args.debug:
+			model(batch)
+		else:
+			try:
+				with torch.no_grad():
+					model(batch)
+			except RuntimeError:
+				print(traceback.format_exc())
+			except AssertionError:
+				print(traceback.format_exc())
+			finally:
+				pass
+				# raise Exception("Unexpected error!")
 		torch.cuda.empty_cache()
 		# batch = fetcher.next()
 
@@ -88,7 +96,7 @@ if __name__ == "__main__":
 	parser.add_argument("--shapenet_filelist_dir", default="data/ShapeNet/filelist", type=str)
 	parser.add_argument("--file_list", default=["train_airplane.txt", "test_airplane.txt"], type=str, nargs="+")
 	parser.add_argument("--log_dir", default='logs', type=str)
-	parser.add_argument("--save_file_type", default=["ply", "png", "npz", "glb", "obj"], type=str, nargs="+")
+	parser.add_argument("--save_file_type", default=["pointcloud", "image", "data", "normal", "origin", "object"], type=str, nargs="+")
 	
 	# Render settings
 	parser.add_argument("--camera_mode", default="Perspective", type=str)

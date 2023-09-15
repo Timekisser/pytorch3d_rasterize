@@ -11,14 +11,14 @@ main.py \
 --dataset "ShapeNet" \
 --shapenet_mesh_dir "data/ShapeNet/ShapeNetCore.v1" \
 --shapenet_filelist_dir "data/ShapeNet/filelist" \
---output_dir "data/ShapeNet/pointcloud" \
+--output_dir "data/ShapeNet/" \
 --log_dir ${log_dir} \
 --num_workers 8 \
 --total_uid_counts 8000000 \
 --num_points 200000 \
 --file_list "train_airplane.txt" "test_airplane.txt" \
---save_file_type "ply" "npz" \
+--save_file_type "pointcloud" "data" \
+--resume \
 # --debug \
-# --resume \
 # --camera_mode "Orthographic" \
 ######

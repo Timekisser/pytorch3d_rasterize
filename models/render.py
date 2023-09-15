@@ -21,7 +21,7 @@ from pytorch3d.renderer import (
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=1024, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -73,12 +73,23 @@ class PointCloudRender(torch.nn.Module):
 			raise Exception("No such camera mode.")
 		return cameras
 
-	def get_rasterizer(self, bin_size):
+	def get_bin_size(self, meshes):
+		bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 12))
+		bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
+		bin_size = max(bin_size_face, bin_size_image)
+		return bin_size
+	
+	def get_max_faces_per_bin(self, meshes):
+		max_faces_per_bin = int(meshes._F * 0.8)
+		return max_faces_per_bin
+
+	def get_rasterizer(self, meshes):
 		raster_settings = RasterizationSettings(
 			image_size=self.image_size,
 			blur_radius=0.0,
 			faces_per_pixel=self.args.faces_per_pixel,
-			bin_size=bin_size,
+			bin_size=self.get_bin_size(meshes),
+			max_faces_per_bin=self.get_max_faces_per_bin(meshes),
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizer(
@@ -95,21 +106,14 @@ class PointCloudRender(torch.nn.Module):
 		# Create a mesh renderer by composing a rasterizer and a shader
 		return shader
 	
-	def get_bin_size(self, meshes):
-		bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 8))
-		bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
-		bin_size = max(bin_size_face, bin_size_image)
-		return bin_size
-	
 	def render(self, meshes, uid):
 		if self.args.bin_mode == "naive":
 			self.rasterizer = self.get_rasterizer(bin_size=0)
 		else:
-			bin_size = self.get_bin_size(meshes)
-			self.rasterizer = self.get_rasterizer(bin_size)
-			print(f"Bin size: {bin_size} Face: {meshes._F // 6} uid: {uid}", flush=True)
-			
+			self.rasterizer = self.get_rasterizer(meshes)
+
 		fragments = self.rasterizer(meshes)
+		# colors = meshes.textures.sample_textures(fragments)
 		images = self.shader(fragments, meshes)
 		return fragments, images
 
@@ -134,6 +138,7 @@ class PointCloudRender(torch.nn.Module):
 			fragments.pix_to_face, fragments.bary_coords, faces_verts
 		)
 
+		# 使用vertex normal插值出normal
 		# vertex_normals = meshes.verts_normals_packed()  # (V, 3)
 		# self.visualize_points_and_normals(verts.cpu().numpy(), vertex_normals.cpu().numpy(), "0000")
 		# faces_normals = vertex_normals[faces]
@@ -155,14 +160,16 @@ class PointCloudRender(torch.nn.Module):
 		pixel_normals = pixel_normals[valid_v, valid_x, valid_y, 0]	# (P, 3)
 		pixel_colors = images[valid_v, valid_x, valid_y, :]	# (P, 4)
 
-		# normals_valid = torch.norm(pixel_normals, p=2, dim=1) != 0
-		# pixel_coords = pixel_coords[normals_valid]
-		# pixel_normals = pixel_normals[normals_valid]
-		# pixel_colors = pixel_colors[normals_valid]
-
+		# 正常来说得到的法向量norm都应该是1
+		# 但有部分为0，有部分在0~1
+		normals_norm = torch.norm(pixel_normals, p=2, dim=1)
+		normals_valid = normals_norm > 0.9
+		pixel_coords = pixel_coords[normals_valid]
+		pixel_normals = pixel_normals[normals_valid]
+		pixel_colors = pixel_colors[normals_valid]
 
 		P = pixel_coords.shape[0]
-		random_indices = torch.randperm(P, device=self.device)[:self.num_points]
+		random_indices = torch.randint(0, P, size=(self.num_points, ), device=self.device)
 		points = pixel_coords[random_indices]
 		normals = pixel_normals[random_indices]
 		normals = normals / torch.norm(normals, p=2, dim=1, keepdim=True)
@@ -178,10 +185,6 @@ class PointCloudRender(torch.nn.Module):
 		# dilate points
 		points = points + 0.005 * normals
 
-		assert not torch.isnan(points).any()
-		assert not torch.isnan(normals).any()
-		assert not torch.isnan().any()
-
 		points = points.cpu().numpy()
 		normals = normals.cpu().numpy()
 		colors = colors.cpu().numpy()
@@ -193,13 +196,11 @@ class PointCloudRender(torch.nn.Module):
 		filename_ply = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")
 
-		if "ply" in self.args.save_file_type:
+		if "pointcloud" in self.args.save_file_type:
 			pointcloud.export(filename_ply, file_type="ply")
-		if "npz" in self.args.save_file_type:
-			colors *= 255.0
+		if "data" in self.args.save_file_type:
 			np.savez(filename_npy, points=points, normals=normals, colors=colors)
-		
-		if self.args.debug:
+		if "normal" in self.args.save_file_type:
 			self.visualize_points_and_normals(points, normals, uid)
 	
 	def visualize_points_and_normals(self, points, normals, uid):
@@ -238,9 +239,9 @@ class PointCloudRender(torch.nn.Module):
 		filename_ply = os.path.join(save_dir, "interior.ply")
 		filename_npy = os.path.join(save_dir, "interior.npz")
 
-		if "ply" in self.args.save_file_type:
+		if "pointcloud" in self.args.save_file_type:
 			pointcloud.export(filename_ply, file_type="ply")
-		if "npz" in self.args.save_file_type:
+		if "data" in self.args.save_file_type:
 			np.savez(filename_npy, points=points)	
 
 	def forward(self, batch):
@@ -252,7 +253,7 @@ class PointCloudRender(torch.nn.Module):
 			print(f"Start render pointcloud of {uid}", flush=True)
 			meshes = mesh.extend(self.num_views)
 			fragments, images = self.render(meshes, uid)
-			if "png" in self.args.save_file_type:
+			if "image" in self.args.save_file_type:
 				self.gen_image(images, uid)
 
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)

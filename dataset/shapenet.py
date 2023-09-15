@@ -22,8 +22,9 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		self.args = args
 		self.device = args.device
 		self.output_dir = args.output_dir
+		self.pointcloud_dir = os.path.join(self.output_dir, "pointcloud")
 		self.mesh_dir = args.shapenet_mesh_dir
-		self.filelist = ShapeNetFileList(args, args.total_uid_counts, args.shapenet_filelist_dir)
+		self.filelist = ShapeNetFileList(args, args.total_uid_counts)
 
 	def get_geometry(self, filename_obj):
 		geometry = trimesh.load(filename_obj, force="mesh")
@@ -85,8 +86,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		return interp_values
 
 	def gen_points(self, geometry, filename):
-		filename_pts = os.path.join(self.output_dir, filename, 'pointcloud.npz')
-		filename_ply = os.path.join(self.output_dir, filename, 'pointcloud.ply')
+		filename_pts = os.path.join(self.pointcloud_dir, filename, 'pointcloud.npz')
+		filename_ply = os.path.join(self.pointcloud_dir, filename, 'pointcloud.ply')
 		os.makedirs(os.path.dirname(filename_pts), exist_ok=True)
 
 		points, face_idx = trimesh.sample.sample_surface(geometry, self.args.num_points)
@@ -106,10 +107,10 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		else:
 			raise Exception("Colors Error!")
 		
-		if "ply" in self.args.save_file_type:
+		if "pointcloud" in self.args.save_file_type:
 			pointcloud = trimesh.PointCloud(vertices=points, colors=colors)
 			pointcloud.export(filename_ply, file_type="ply")
-		if "npz" in self.args.save_file_type:
+		if "data" in self.args.save_file_type:
 			np.savez(filename_pts, points=points.astype(np.float16), normals=normals.astype(np.float16), colors=colors.astype(np.float16))
 
 	def load_mesh(self, filename):
@@ -142,8 +143,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		filename_interior = os.path.join(self.output_dir, "interior", uid, "interior.npz")
-		if self.args.resume and os.path.exists(filename_interior):
+		filename_ply = os.path.join(self.pointcloud_dir, uid, "pointcloud.npz")
+		if self.args.resume and os.path.exists(filename_ply):
 			print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
@@ -158,17 +159,22 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		return batch
 
 class ShapeNetFileList:
-	def __init__(self, args, total_uid_counts, shapenet_filelist_dir):
+	def __init__(self, args, total_uid_counts):
 		self.args = args
 		self.total_uid_counts = total_uid_counts
-		self.shapenet_filelist_dir = shapenet_filelist_dir
+		self.output_dir = args.output_dir
+		self.filelist_dir = args.shapenet_filelist_dir
 		self.filenames = []
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
+		self.uids = [
+			"02691156/16f67f87f414a5df26360e1e29a956c7",
+			"02691156/1a6ad7a24bb89733f412783097373bdc",
+		]
 
 	def get_filenames(self, filelist):
-		filelist = os.path.join(self.shapenet_filelist_dir, filelist)
+		filelist = os.path.join(self.filelist_dir, filelist)
 		with open(filelist, 'r') as fid:
 			lines = fid.readlines()
 		filenames = [line.split()[0] for line in lines]
@@ -178,9 +184,9 @@ class ShapeNetFileList:
 		uids = []
 		for filename in self.filenames:
 			if self.args.get_interior_points:
-				filepath = os.path.join(self.shapenet_filelist_dir, "interior", filename, "interior.npz")
+				filepath = os.path.join(self.output_dir, "interior", filename, "interior.npz")
 			elif self.args.get_render_points:
-				filepath = os.path.join(self.shapenet_filelist_dir, "pointcloud", filename, "pointcloud.npz")
+				filepath = os.path.join(self.output_dir, "pointcloud", filename, "pointcloud.npz")
 			if self.args.resume == False or os.path.exists(filepath) == False:
 				uids.append(filename)
 		return uids

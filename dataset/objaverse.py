@@ -70,7 +70,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		return textures, valid
 
 	def load_mesh(self, filename_obj):
-		if "glb" in self.args.save_file_type:
+		if "origin" in self.args.save_file_type:
 			self.copy_glb(filename_obj)
 		
 		geometry, valid = self.get_geometry(filename_obj)
@@ -91,7 +91,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
-		if "obj" in self.args.save_file_type:
+		if "object" in self.args.save_file_type:
 			self.save_obj(filename_obj, geometry)
 		return mesh, valid
 
