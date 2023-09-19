@@ -75,16 +75,16 @@ class PointCloudRender(torch.nn.Module):
 
 	def get_bin_size(self, meshes):
 		if self.args.bin_mode == "coarse":
-			# bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 12))
-			bin_size = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
-			# bin_size = max(bin_size_face, bin_size_image)
+			bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 8))
+			bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
+			bin_size = max(bin_size_face, bin_size_image)
 		else:
 			bin_size = 0
 		return bin_size
 	
 	def get_max_faces_per_bin(self, meshes):
 		if self.args.bin_mode == "coarse":
-			max_faces_per_bin = int(meshes._F * 0.9)
+			max_faces_per_bin = int(meshes._F) * 2
 		else:
 			max_faces_per_bin = None
 		return max_faces_per_bin
