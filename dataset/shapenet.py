@@ -8,6 +8,7 @@ import pathlib
 import numpy as np
 from tqdm import tqdm
 
+import pytorch3d
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
@@ -28,10 +29,12 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 
 	def get_geometry(self, filename_obj):
 		geometry = trimesh.load(filename_obj, force="mesh")
-		# geometry = trimesh.util.concatenate(scene.dump())
+		# geometry = trimesh.util.concatenate(geometry.dump())
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
+		# if "object" in self.args.save_file_type:
+			# self.save_obj(filename_obj, geometry=geometry)
 		return geometry, valid
 
 	def get_textures(self, visual, verts, faces):
@@ -136,7 +139,21 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
+		# mesh = IO().load_mesh(filename_obj, load_textures=True)
+		# valid = True
+
+		# if "object" in self.args.save_file_type:
+		# 	self.save_obj(filename_obj, mesh=mesh)
 		return mesh, valid
+
+	def save_obj(self, filename_obj, geometry=None, mesh=None):
+		filename = os.path.basename(filename_obj)[:-4]
+		save_dir = os.path.join(self.output_dir, f"temp/{filename}")
+		os.makedirs(save_dir, exist_ok=True)
+		if geometry is not None:
+			trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+		if mesh is not None:
+			IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.uids)

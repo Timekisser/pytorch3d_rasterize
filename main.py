@@ -5,16 +5,19 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.data.sampler import BatchSampler, SequentialSampler
 import argparse
 import os
+import shutil
 import sys
 import traceback
+import multiprocessing as mp
 from tqdm import tqdm
 from dataset.objaverse import ObjaverseDataset
-from dataset.shapenet import ShapeNetDataset
+from dataset.shapenet import ShapeNetDataset, ShapeNetFileList
 from dataset.prefetch import DataPreFetcher 
 from models.render import PointCloudRender
 from utils.distributed import (
-    get_rank,
-    synchronize,
+	get_rank,
+	synchronize,
+	get_world_size,
 )
 os.environ['CUDA_LAUNCH_BLOCKING']='1'
 def build_dataloader(args):
@@ -61,15 +64,50 @@ def generate_pointcloud(args):
 			try:
 				with torch.no_grad():
 					model(batch)
-			except RuntimeError:
-				print(traceback.format_exc())
-			except AssertionError:
-				print(traceback.format_exc())
-			finally:
-				pass
-				# raise Exception("Unexpected error!")
+			except: 
+				print(traceback.format_exc(), flush=True)
+				raise Exception("Unexpected error!")
 		torch.cuda.empty_cache()
 		# batch = fetcher.next()
+
+def shapenet_mesh_repair(args, num_processes=4):
+	gpu_ids = os.environ['CUDA_VISIBLE_DEVICES'].split(",")
+	world_size = len(gpu_ids)
+	print(num_processes, gpu_ids, flush=True)
+	filelist = ShapeNetFileList(args, args.total_uid_counts)
+	mesh_dir = args.shapenet_mesh_dir
+	num_meshes = len(filelist.uids)
+	mesh_per_process = num_meshes // num_processes
+
+	def process(process_id):
+		os.environ['CUDA_VISIBLE_DEVICES']=str(gpu_ids[process_id % world_size])
+		for i in tqdm(range(process_id * mesh_per_process, (process_id + 1)* mesh_per_process), ncols=80):
+			if i >= num_meshes:
+				continue
+			uid = filelist.uids[i]
+			print(f"Repair mesh {uid}", flush=True)
+			folder_obj = os.path.join(mesh_dir, uid)
+			folder_repair = os.path.join(args.output_dir, "mesh_repair", uid)
+			filename_obj = os.path.join(folder_obj, "model.obj")
+			filename_repair = os.path.join(folder_repair, "model.obj")
+			
+			if args.resume and os.path.exists(filename_repair):
+				continue
+			os.makedirs(folder_repair, exist_ok=True)
+			shutil.copytree(folder_obj, folder_repair, dirs_exist_ok=True)
+			os.remove(filename_repair)
+			command = f"./utils/RayCastMeshRepair --input {filename_obj} --output {filename_repair}"
+			output = os.system(command)
+			assert output == 0
+	
+	if num_processes == 1:
+		process(0)
+	else:
+		processes = [mp.Process(target=process, args=[pid]) for pid in range(num_processes)]
+		for p in processes:
+			p.start()
+		for p in processes:
+			p.join()
 
 if __name__ == "__main__":
 	# torch.multiprocessing.set_start_method('spawn')
@@ -107,6 +145,7 @@ if __name__ == "__main__":
 	parser.add_argument("--faces_per_pixel", default=1, type=int)
 	parser.add_argument("--get_interior_points", action="store_true")
 	parser.add_argument("--get_render_points", action="store_true")
+	parser.add_argument("--mesh_repair", action="store_true")
 
 	args = parser.parse_args()
 
@@ -124,7 +163,11 @@ if __name__ == "__main__":
 		synchronize()
 
 	print(args, flush=True)
-	generate_pointcloud(args)
+	if args.mesh_repair:
+		if args.dataset == "ShapeNet":
+			shapenet_mesh_repair(args)
+	else:
+		generate_pointcloud(args)
 	
 	sys.stdout.close()
 	sys.stderr.close()

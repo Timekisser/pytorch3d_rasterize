@@ -27,8 +27,8 @@ class PointCloudRender(torch.nn.Module):
 		self.image_size = image_size
 		self.camera_dist = camera_dist
 		self.batch_size = args.batch_size
-		self.elevation =  [0, 0,  0,   0,   -90, 90] + [-45, -45, -45, -45, 45, 45,  45,  45]
-		self.azim_angle = [0, 90, 180, 270, 0,   0]  + [45,  135, 225, 315, 45, 135, 225, 315]	
+		self.elevation =  [0, 0,  0,   0,   -90, 90] #+ [-45, -45, -45, -45, 45, 45,  45,  45]
+		self.azim_angle = [0, 90, 180, 270, 0,   0]  #+ [45,  135, 225, 315, 45, 135, 225, 315]	
 		self.num_views = len(self.elevation)
 		self.num_points = args.num_points
 		self.device = device
@@ -116,7 +116,6 @@ class PointCloudRender(torch.nn.Module):
 		self.rasterizer = self.get_rasterizer(meshes)
 
 		fragments = self.rasterizer(meshes)
-		# colors = meshes.textures.sample_textures(fragments)
 		images = self.shader(fragments, meshes)
 		return fragments, images
 
@@ -157,10 +156,13 @@ class PointCloudRender(torch.nn.Module):
 
 		return pixel_coords_in_camera, pixel_normals
 
-	def gen_pointcloud(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
+	def gen_pointcloud(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid, meshes):
 		valid_v, valid_x, valid_y = torch.where(fragments.pix_to_face[:, :, :, 0] != -1)
 		pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, 0] # (P, 3)
 		pixel_normals = pixel_normals[valid_v, valid_x, valid_y, 0]	# (P, 3)
+		images = meshes.textures.sample_textures(fragments).squeeze()
+		ones = torch.ones((images.shape[:-1]), device=self.device).unsqueeze(-1)
+		images = torch.cat([images, ones], dim=-1)
 		pixel_colors = images[valid_v, valid_x, valid_y, :]	# (P, 4)
 
 		# 正常来说得到的法向量norm都应该是1
@@ -261,6 +263,6 @@ class PointCloudRender(torch.nn.Module):
 
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
 			if self.args.get_render_points:	
-				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid, meshes)
 			if self.args.get_interior_points:
 				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
