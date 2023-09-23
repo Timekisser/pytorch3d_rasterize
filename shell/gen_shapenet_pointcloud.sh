@@ -18,7 +18,7 @@ main.py \
 --num_points 200000 \
 --file_list "train_airplane.txt" "test_airplane.txt" \
 --save_file_type "pointcloud" "data" "normal" \
-# --resume \
+--resume \
 # --debug \
 # --camera_mode "Orthographic" \
 ######

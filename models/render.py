@@ -117,7 +117,10 @@ class PointCloudRender(torch.nn.Module):
 		self.rasterizer = self.get_rasterizer(meshes)
 
 		fragments = self.rasterizer(meshes)
-		images = self.shader(fragments, meshes)
+		if "image" in self.args.save_file_type:
+			images = self.shader(fragments, meshes)
+		else:
+			images = None
 		return fragments, images
 
 	def gen_image(self, images, uid):
@@ -132,7 +135,7 @@ class PointCloudRender(torch.nn.Module):
 			plt.savefig(filename_png)
 			plt.cla()
 
-	def get_pixel_data(self, meshes, fragments, image):
+	def get_pixel_data(self, meshes, fragments):
 		verts = meshes.verts_packed()  # (N, V, 3)
 		faces = meshes.faces_packed()  # (N, F, 3)
 		# texels = meshes.sample_textures(fragments)
@@ -153,18 +156,14 @@ class PointCloudRender(torch.nn.Module):
 		pixel_valid = fragments.pix_to_face != -1
 		pixel_normals = faces_normals[fragments.pix_to_face]
 		pixel_normals[pixel_valid.logical_not()] = 0
-
-
 		return pixel_coords_in_camera, pixel_normals
 
-	def gen_pointcloud(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid, meshes):
+	def gen_pointcloud(self, fragments, meshes, pixel_coords_in_camera, pixel_normals, uid):
 		valid_v, valid_x, valid_y = torch.where(fragments.pix_to_face[:, :, :, 0] != -1)
 		pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, 0] # (P, 3)
 		pixel_normals = pixel_normals[valid_v, valid_x, valid_y, 0]	# (P, 3)
-		images = meshes.textures.sample_textures(fragments).squeeze()
-		ones = torch.ones((images.shape[:-1]), device=self.device).unsqueeze(-1)
-		images = torch.cat([images, ones], dim=-1)
-		pixel_colors = images[valid_v, valid_x, valid_y, :]	# (P, 4)
+		texels = meshes.sample_textures(fragments).squeeze(-2)
+		pixel_colors = texels[valid_v, valid_x, valid_y, :]	# (P, 3)
 
 		# 正常来说得到的法向量norm都应该是1
 		# 但有部分为0，有部分在0~1
@@ -195,7 +194,10 @@ class PointCloudRender(torch.nn.Module):
 		normals = normals.cpu().numpy()
 		colors = colors.cpu().numpy()
 
-		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors)
+		# RGB -> RGBA
+		ones = np.ones((colors.shape[0], 1))
+		colors_rgba = np.concatenate([colors, ones], axis=1)
+		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors_rgba)
 		save_dir = os.path.join(self.pointcloud_dir, uid)
 		print("Saved pointcloud as " + str(save_dir), flush=True)
 		os.makedirs(save_dir, exist_ok=True)
@@ -262,8 +264,8 @@ class PointCloudRender(torch.nn.Module):
 			if "image" in self.args.save_file_type:
 				self.gen_image(images, uid)
 
-			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments, images) 	# (N, P, K, 3)
+			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
 			if self.args.get_render_points:	
-				self.gen_pointcloud(fragments, images, pixel_coords_in_camera, pixel_normals, uid, meshes)
+				self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
 			if self.args.get_interior_points:
 				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)

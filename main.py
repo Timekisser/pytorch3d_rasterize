@@ -66,7 +66,7 @@ def generate_pointcloud(args):
 					model(batch)
 			except: 
 				print(traceback.format_exc(), flush=True)
-				raise Exception("Unexpected error!")
+				# raise Exception("Unexpected error!")
 		torch.cuda.empty_cache()
 		# batch = fetcher.next()
 
