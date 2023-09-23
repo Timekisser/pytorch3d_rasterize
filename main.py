@@ -85,17 +85,15 @@ def shapenet_mesh_repair(args, num_processes=4):
 			if i >= num_meshes:
 				continue
 			uid = filelist.uids[i]
-			print(f"Repair mesh {uid}", flush=True)
+			print(f"Repairing mesh {uid}", flush=True)
 			folder_obj = os.path.join(mesh_dir, uid)
 			folder_repair = os.path.join(args.output_dir, "mesh_repair", uid)
 			filename_obj = os.path.join(folder_obj, "model.obj")
 			filename_repair = os.path.join(folder_repair, "model.obj")
 			
-			if args.resume and os.path.exists(filename_repair):
-				continue
 			os.makedirs(folder_repair, exist_ok=True)
 			shutil.copytree(folder_obj, folder_repair, dirs_exist_ok=True)
-			os.remove(filename_repair)
+			os.rename(filename_repair, os.path.join(folder_repair, "origin.obj"))
 			command = f"./utils/RayCastMeshRepair --input {filename_obj} --output {filename_repair}"
 			output = os.system(command)
 			assert output == 0

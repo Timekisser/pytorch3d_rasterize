@@ -96,6 +96,7 @@ class PointCloudRender(torch.nn.Module):
 			faces_per_pixel=self.args.faces_per_pixel,
 			bin_size=self.get_bin_size(meshes),
 			max_faces_per_bin=self.get_max_faces_per_bin(meshes),
+			cull_backfaces=True,
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizer(

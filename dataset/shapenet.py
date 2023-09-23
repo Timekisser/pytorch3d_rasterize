@@ -185,6 +185,7 @@ class ShapeNetFileList:
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
+		self.uids = ['02691156/1a04e3eab45ca15dd86060f189eb133']
 
 	def get_filenames(self, filelist):
 		filelist = os.path.join(self.filelist_dir, filelist)
@@ -200,6 +201,8 @@ class ShapeNetFileList:
 				filepath = os.path.join(self.output_dir, "interior", filename, "interior.npz")
 			elif self.args.get_render_points:
 				filepath = os.path.join(self.output_dir, "pointcloud", filename, "pointcloud.npz")
+			elif self.args.mesh_repair:
+				filepath = os.path.join(self.output_dir, "mesh_repair", filename, "model.obj")
 			if self.args.resume == False or os.path.exists(filepath) == False:
 				uids.append(filename)
 		return uids

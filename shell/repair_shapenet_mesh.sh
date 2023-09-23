@@ -10,5 +10,5 @@ main.py \
 --output_dir "data/ShapeNet/" \
 --log_dir ${log_dir} \
 --file_list "train_airplane.txt" "test_airplane.txt" \
-# --resume \
+--resume \
 ######
