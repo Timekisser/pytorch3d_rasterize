@@ -14,11 +14,11 @@ main.py \
 --output_dir "data/ShapeNet/" \
 --log_dir ${log_dir} \
 --num_workers 8 \
---total_uid_counts 8000000 \
 --num_points 200000 \
+--image_size 1024 \
 --file_list "train_airplane.txt" "test_airplane.txt" \
 --save_file_type "pointcloud" "data" "normal" \
---resume \
+# --resume \
 # --debug \
 # --camera_mode "Orthographic" \
 ######
