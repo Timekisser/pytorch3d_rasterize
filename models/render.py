@@ -27,8 +27,8 @@ class PointCloudRender(torch.nn.Module):
 		self.image_size = image_size
 		self.camera_dist = camera_dist
 		self.batch_size = args.batch_size
-		self.elevation =  [0, 0,  0,   0,   -90, 90] #+ [-45, -45, -45, -45, 45, 45,  45,  45]
-		self.azim_angle = [0, 90, 180, 270, 0,   0]  #+ [45,  135, 225, 315, 45, 135, 225, 315]	
+		self.elevation =  [0, 0,  0,   0,   -90, 90] + [-45, -45, -45, -45, 45, 45,  45,  45]
+		self.azim_angle = [0, 90, 180, 270, 0,   0]  + [45,  135, 225, 315, 45, 135, 225, 315]	
 		self.num_views = len(self.elevation)
 		self.num_points = args.num_points
 		self.device = device
