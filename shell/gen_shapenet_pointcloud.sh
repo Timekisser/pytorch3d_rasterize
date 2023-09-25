@@ -14,9 +14,9 @@ main.py \
 --output_dir "data/ShapeNet/" \
 --log_dir ${log_dir} \
 --num_workers 8 \
---num_points 200000 \
---image_size 1024 \
---file_list "train_airplane.txt" "test_airplane.txt" \
+--num_points 100000 \
+--image_size 600 \
+--file_list "train_chair.txt" "test_chair.txt" \
 --save_file_type "pointcloud" "data" "normal" \
 # --resume \
 # --debug \

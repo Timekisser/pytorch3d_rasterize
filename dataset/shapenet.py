@@ -60,7 +60,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			maps = torch.div(maps, 255.0)
 			maps = maps.unsqueeze(0)
 			uvs = torch.tensor(visual.uv, dtype=torch.float).unsqueeze(0)
-			textures = TexturesUV(maps, faces, uvs)
+			textures = TexturesUV(maps, faces, uvs, padding_mode="reflection")
 		elif main_color is not None:
 			vert_colors = torch.tensor(main_color, dtype=torch.float)
 			vert_colors = vert_colors[:3] / 255.
@@ -132,7 +132,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		# self.gen_points(geometry, filename)
 
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
-		faces = torch.tensor(geometry.faces, dtype=torch.int).unsqueeze(0)
+		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
 
@@ -142,8 +142,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		# mesh = IO().load_mesh(filename_obj, load_textures=True)
 		# valid = True
 
-		# if "object" in self.args.save_file_type:
-		# 	self.save_obj(filename_obj, mesh=mesh)
+		if "object" in self.args.save_file_type:
+			self.save_obj(filename_obj, mesh=mesh)
 		return mesh, valid
 
 	def save_obj(self, filename_obj, geometry=None, mesh=None):
