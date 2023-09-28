@@ -185,6 +185,7 @@ class ShapeNetFileList:
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
+		# self.uids = ['02691156/1a04e3eab45ca15dd86060f189eb133']
 
 	def get_filenames(self, filelist):
 		filelist = os.path.join(self.filelist_dir, filelist)

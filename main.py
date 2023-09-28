@@ -146,6 +146,7 @@ if __name__ == "__main__":
 	parser.add_argument("--get_interior_points", action="store_true")
 	parser.add_argument("--get_render_points", action="store_true")
 	parser.add_argument("--mesh_repair", action="store_true")
+	parser.add_argument("--cull_backfaces", action="store_true")
 
 	args = parser.parse_args()
 

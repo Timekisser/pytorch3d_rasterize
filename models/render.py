@@ -16,8 +16,10 @@ from pytorch3d.renderer import (
 	MeshRenderer,
 	MeshRasterizer,
 	SoftPhongShader,
+	SplatterPhongShader,
 	PointsRenderer,
 )
+from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
@@ -96,10 +98,10 @@ class PointCloudRender(torch.nn.Module):
 			faces_per_pixel=self.args.faces_per_pixel,
 			bin_size=self.get_bin_size(meshes),
 			max_faces_per_bin=self.get_max_faces_per_bin(meshes),
-			cull_backfaces=True,
+			cull_backfaces=self.args.cull_backfaces,
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
-		rasterizer = MeshRasterizer(
+		rasterizer = MeshRasterizerOpenGL(
 			cameras=self.cameras,
 			raster_settings=raster_settings
 		)
@@ -109,7 +111,7 @@ class PointCloudRender(torch.nn.Module):
 		# The textured phong shader interpolates the texture uv coordinates for
 		# each vertex, and samples from a texture image.
 		# lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
-		shader = SoftPhongShader(cameras=self.cameras, device=self.device)
+		shader = SplatterPhongShader(cameras=self.cameras, device=self.device)
 		# Create a mesh renderer by composing a rasterizer and a shader
 		return shader
 	
@@ -188,7 +190,7 @@ class PointCloudRender(torch.nn.Module):
 		normals[normals_negative] = -1.0 * normals[normals_negative]
 
 		# dilate points
-		points = points + 0.005 * normals
+		points = points + self.args.points_dilate * normals
 
 		points = points.cpu().numpy()
 		normals = normals.cpu().numpy()
