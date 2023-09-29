@@ -7,11 +7,12 @@ import trimesh
 import pathlib
 import numpy as np
 from tqdm import tqdm
-
+import open3d as o3d
 import pytorch3d
-from pytorch3d.io import IO
+from pytorch3d.io import IO, load_obj
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
+	Textures,
 	TexturesUV,
 	TexturesVertex,
 )
@@ -27,14 +28,16 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		self.mesh_dir = args.shapenet_mesh_dir
 		self.filelist = ShapeNetFileList(args, args.total_uid_counts)
 
-	def get_geometry(self, filename_obj):
-		geometry = trimesh.load(filename_obj, force="mesh")
-		# geometry = trimesh.util.concatenate(geometry.dump())
+	def get_geometry(self, filename):
+		filename_obj = os.path.join(self.mesh_dir, filename,  'model.obj')
+
+		geometry = trimesh.load(filename_obj) #, maintain_order=True)
+		geometry = trimesh.util.concatenate(geometry.dump())
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
-		# if "object" in self.args.save_file_type:
-			# self.save_obj(filename_obj, geometry=geometry)
+		if "object" in self.args.save_file_type:
+			self.save_obj(filename, trimesh_mesh=geometry)
 		return geometry, valid
 
 	def get_textures(self, visual, verts, faces):
@@ -117,8 +120,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			np.savez(filename_pts, points=points.astype(np.float16), normals=normals.astype(np.float16), colors=colors.astype(np.float16))
 
 	def load_mesh(self, filename):
-		filename_obj = os.path.join(self.mesh_dir, filename,  'model.obj')		
-		geometry, valid = self.get_geometry(filename_obj)
+		geometry, valid = self.get_geometry(filename)
 		if not valid:
 			print("Invalid geometry type.", flush=True)
 			return None, valid
@@ -139,21 +141,20 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
-		# mesh = IO().load_mesh(filename_obj, load_textures=True)
-		# valid = True
 
 		if "object" in self.args.save_file_type:
-			self.save_obj(filename_obj, mesh=mesh)
+			self.save_obj(filename, pytorch3d_mesh=mesh)
 		return mesh, valid
 
-	def save_obj(self, filename_obj, geometry=None, mesh=None):
-		filename = os.path.basename(filename_obj)[:-4]
-		save_dir = os.path.join(self.output_dir, f"temp/{filename}")
-		os.makedirs(save_dir, exist_ok=True)
-		if geometry is not None:
-			trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		if mesh is not None:
-			IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+	def save_obj(self, filename, trimesh_mesh=None, pytorch3d_mesh=None):
+		if trimesh_mesh is not None:
+			save_dir = os.path.join(self.output_dir, f"temp/{filename}/trimesh")
+			os.makedirs(save_dir, exist_ok=True)
+			trimesh.exchange.export.export_mesh(trimesh_mesh, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+		if pytorch3d_mesh is not None:
+			save_dir = os.path.join(self.output_dir, f"temp/{filename}/pytorch3d")
+			os.makedirs(save_dir, exist_ok=True)
+			IO().save_mesh(pytorch3d_mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.uids)
@@ -165,7 +166,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
-			mesh, valid = self.load_mesh(uid)
+			mesh, valid = self.load_mesh_pytorch3d(uid)
 		return {
 			"mesh": mesh,
 			"uid": uid,
@@ -185,7 +186,7 @@ class ShapeNetFileList:
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
-		# self.uids = ['02691156/1a04e3eab45ca15dd86060f189eb133']
+		self.uids = ['02958343/1ac8b8c486a77dbc65db4f1fb47e0c1d']
 
 	def get_filenames(self, filelist):
 		filelist = os.path.join(self.filelist_dir, filelist)
