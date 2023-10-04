@@ -31,8 +31,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 	def get_geometry(self, filename):
 		filename_obj = os.path.join(self.mesh_dir, filename,  'model.obj')
 
-		geometry = trimesh.load(filename_obj) #, maintain_order=True)
-		geometry = trimesh.util.concatenate(geometry.dump())
+		geometry = trimesh.load(filename_obj, force="mesh", maintain_order=True)
+		# geometry = trimesh.util.concatenate(geometry.dump())
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
@@ -166,7 +166,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
-			mesh, valid = self.load_mesh_pytorch3d(uid)
+			mesh, valid = self.load_mesh(uid)
 		return {
 			"mesh": mesh,
 			"uid": uid,
@@ -186,7 +186,7 @@ class ShapeNetFileList:
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
-		self.uids = ['02958343/1ac8b8c486a77dbc65db4f1fb47e0c1d']
+		# self.uids = ['02958343/1ac8b8c486a77dbc65db4f1fb47e0c1d']
 
 	def get_filenames(self, filelist):
 		filelist = os.path.join(self.filelist_dir, filelist)
