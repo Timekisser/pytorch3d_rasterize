@@ -22,7 +22,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		self.args = args
 		self.device = args.device
 		self.filelist = ObjaverseFileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir)
-		self.temp_dir = args.output_dir
+		self.output_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
 		if self.args.debug and os.path.getsize(filename_obj) > 100 * 1024 * 1024:
@@ -33,10 +33,10 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		# except:
 			# return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
+		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
-			return geometry, True
-		else:
-			return None, False
+			valid = True
+		return geometry, valid
 	
 	def get_textures(self, visual, verts, faces):
 		material = visual.material
@@ -92,22 +92,25 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			print("Invalid texture type.", flush=True)
 			return None, valid
 		if "object" in self.args.save_file_type:
-			self.save_obj(filename_obj, geometry)
+			self.save_obj(filename_obj, trimesh_mesh=geometry, pytorch3d_mesh=mesh)
 		return mesh, valid
 
 	def copy_glb(self, filename_obj):
 		filename = os.path.basename(filename_obj)[:-4]
-		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
+		save_dir = os.path.join(self.output_dir, f"temp/{filename}")
 		os.makedirs(save_dir, exist_ok=True)
 		shutil.copy2(filename_obj, os.path.join(save_dir, "origin.glb"))
 
-
-	def save_obj(self, filename_obj, geometry):
+	def save_obj(self, filename_obj, trimesh_mesh=None, pytorch3d_mesh=None):
 		filename = os.path.basename(filename_obj)[:-4]
-		save_dir = os.path.join(self.temp_dir, f"temp/{filename}")
-		os.makedirs(save_dir, exist_ok=True)
-		trimesh.exchange.export.export_mesh(geometry, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		# IO().save_mesh(mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+		if trimesh_mesh is not None:
+			save_dir = os.path.join(self.output_dir, f"temp/{filename}/trimesh")
+			os.makedirs(save_dir, exist_ok=True)
+			trimesh.exchange.export.export_mesh(trimesh_mesh, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
+		if pytorch3d_mesh is not None:
+			save_dir = os.path.join(self.output_dir, f"temp/{filename}/pytorch3d")
+			os.makedirs(save_dir, exist_ok=True)
+			IO().save_mesh(pytorch3d_mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)
@@ -172,18 +175,18 @@ class ObjaverseFileList:
 	def get_filelists(self):
 		root_folder = self.output_dir
 		glb_length = len(self.glbs)
-		train_length = int(glb_length)
+		train_length = int(glb_length * 0.9)
 		filelist_folder = os.path.join(root_folder, 'filelist')
 		if not os.path.exists(filelist_folder):
 			os.makedirs(filelist_folder)
-		train_list = os.path.join(filelist_folder, 'all.txt')
-		# eval_list = os.path.join(filelist_folder, 'val.txt')
+		train_list = os.path.join(filelist_folder, 'train.txt')
+		eval_list = os.path.join(filelist_folder, 'val.txt')
 		filenames = list(self.glbs.keys())
 		with open(train_list, "w") as f:
 			for filename in filenames[:train_length]:
 				f.write(filename)
 				f.write('\n')
-		# with open(eval_list, "w") as f:
-		# 	for filename in filenames[train_length:]:
-		# 		f.write(filename)
-		# 		f.write('\n')
+		with open(eval_list, "w") as f:
+			for filename in filenames[train_length:]:
+				f.write(filename)
+				f.write('\n')
