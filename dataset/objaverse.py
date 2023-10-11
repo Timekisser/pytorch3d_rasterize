@@ -28,10 +28,10 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		if self.args.debug and os.path.getsize(filename_obj) > 100 * 1024 * 1024:
 			# skip large mesh
 			return None, False
-		# try:
-		scene = trimesh.load(filename_obj)
-		# except:
-			# return None, False
+		try:
+			scene = trimesh.load(filename_obj)
+		except:
+			return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
@@ -123,6 +123,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			mesh, valid = None, False
 		else:
 			mesh, valid = self.load_mesh(self.filelist.glbs[uid])
+
 		return {
 			"mesh": mesh,
 			"uid": uid,
