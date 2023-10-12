@@ -5,6 +5,7 @@ import torch
 import torch.utils.data
 import trimesh
 import pathlib
+import random
 import numpy as np
 from tqdm import tqdm
 
@@ -25,7 +26,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		self.output_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
-		if self.args.debug and os.path.getsize(filename_obj) > 100 * 1024 * 1024:
+		if self.args.debug and os.path.getsize(filename_obj) > 50 * 1024 * 1024:
 			# skip large mesh
 			return None, False
 		try:
@@ -148,7 +149,8 @@ class ObjaverseFileList:
 		self.annotations = []
 
 		self.get_glbs()
-		self.get_filelists()
+		random.shuffle(self.uids)
+		# self.get_filelists()
 
 	def get_glbs(self):
 		self.uids = []
@@ -158,15 +160,15 @@ class ObjaverseFileList:
 				all_uids += cat_uids
 		else:
 			all_uids = objaverse.load_uids()
-
-		# if self.args.debug:
-		# 	all_uids = all_uids[26153:]
+		# all_uids = ["abc586aa9b5f49f0a52c0d1fdccf52ee"]
 
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
-			full_path = os.path.join(self.base_dir, filepath)
-			if os.path.exists(full_path):
-				self.uids.append(uid)
+			glb_path = os.path.join(self.base_dir, filepath)
+			pointcloud_path = os.path.join(self.output_dir, "pointcloud", uid, "pointcloud.npz")
+			if os.path.exists(glb_path):
+				if not (self.args.resume and os.path.exists(pointcloud_path)):
+					self.uids.append(uid)
 			if len(self.uids) >= self.total_uid_counts:
 				break
 		# self.annotations = objaverse.load_annotations(self.uids)

@@ -7,7 +7,6 @@ import argparse
 import os
 import shutil
 import sys
-import traceback
 import multiprocessing as mp
 from tqdm import tqdm
 from dataset.objaverse import ObjaverseDataset
@@ -59,15 +58,9 @@ def generate_pointcloud(args):
 	# for i in range(len(data_loader)):
 	for batch in tqdm(data_loader):
 		mesh_to_cuda(batch, model.device)
-		if args.debug:
+		with torch.no_grad():
 			model(batch)
-		else:
-			try:
-				with torch.no_grad():
-					model(batch)
-			except: 
-				print(traceback.format_exc(), flush=True)
-				# raise Exception("Unexpected error!")
+
 		torch.cuda.empty_cache()
 		# batch = fetcher.next()
 

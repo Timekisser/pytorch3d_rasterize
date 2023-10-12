@@ -1,5 +1,6 @@
-export CUDA_VISIBLE_DEVICES=4,5,6,7
-N_GPUS=4
+# export CUDA_VISIBLE_DEVICES=5,6,7
+echo $CUDA_VISIBLE_DEVICES
+N_GPUS=3
 objaverse_dir='/mnt/sdc/weist/objaverse'
 # output_dir='/mnt/sdb/xiongbj/Objaverse'
 output_dir='data/Objaverse'

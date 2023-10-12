@@ -3,6 +3,7 @@ import torch.nn
 import numpy as np
 import os
 import trimesh
+import traceback
 import matplotlib.pyplot as plt
 from pytorch3d.io import IO
 from pytorch3d.structures import Meshes, Pointclouds
@@ -128,7 +129,7 @@ class PointCloudRender(torch.nn.Module):
 	def gen_image(self, images, uid):
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
-		print("Saved image as " + str(save_dir), flush=True)
+		# print("Saved image as " + str(save_dir), flush=True)
 		for i in range(self.num_views):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]
@@ -162,6 +163,8 @@ class PointCloudRender(torch.nn.Module):
 
 	def gen_pointcloud(self, fragments, meshes, pixel_coords_in_camera, pixel_normals, uid):
 		valid_v, valid_x, valid_y = torch.where(fragments.pix_to_face[:, :, :, 0] != -1)
+		if valid_v.shape[0] == 0:
+			raise Exception("Empty mesh.")
 		pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, 0] # (P, 3)
 		pixel_normals = pixel_normals[valid_v, valid_x, valid_y, 0]	# (P, 3)
 		texels = meshes.sample_textures(fragments).squeeze(-2)
@@ -201,7 +204,7 @@ class PointCloudRender(torch.nn.Module):
 		colors_rgba = np.concatenate([colors, ones], axis=1)
 		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors_rgba)
 		save_dir = os.path.join(self.pointcloud_dir, uid)
-		print("Saved pointcloud as " + str(save_dir), flush=True)
+		# print("Saved pointcloud as " + str(save_dir), flush=True)
 		os.makedirs(save_dir, exist_ok=True)
 		filename_ply = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")
@@ -244,7 +247,7 @@ class PointCloudRender(torch.nn.Module):
 
 		pointcloud = trimesh.points.PointCloud(vertices=points)
 		save_dir = os.path.join(self.interior_dir, uid)
-		print("Saved interior pointcloud as " + str(save_dir), flush=True)
+		# print("Saved interior pointcloud as " + str(save_dir), flush=True)
 		os.makedirs(save_dir, exist_ok=True)
 		filename_ply = os.path.join(save_dir, "interior.ply")
 		filename_npy = os.path.join(save_dir, "interior.npz")
@@ -260,14 +263,18 @@ class PointCloudRender(torch.nn.Module):
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
 				continue
-			print(f"Start render pointcloud of {uid}", flush=True)
-			meshes = mesh.extend(self.num_views)
-			fragments, images = self.render(meshes, uid)
-			if "image" in self.args.save_file_type:
-				self.gen_image(images, uid)
+			# print(f"Start render pointcloud of {uid}", flush=True)
+			try:
+				meshes = mesh.extend(self.num_views)
+				fragments, images = self.render(meshes, uid)
+				if "image" in self.args.save_file_type:
+					self.gen_image(images, uid)
 
-			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
-			if self.args.get_render_points:	
-				self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
-			if self.args.get_interior_points:
-				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+				pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
+				if self.args.get_render_points:	
+					self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
+				if self.args.get_interior_points:
+					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			except:
+				print(f"Render Error in mesh {uid}.", flush=True)
+				print(traceback.format_exc(), flush=True)
