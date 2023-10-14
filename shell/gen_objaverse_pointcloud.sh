@@ -1,6 +1,6 @@
-# export CUDA_VISIBLE_DEVICES=5,6,7
+export CUDA_VISIBLE_DEVICES=4,5,6,7
 echo $CUDA_VISIBLE_DEVICES
-N_GPUS=3
+N_GPUS=4
 objaverse_dir='/mnt/sdc/weist/objaverse'
 # output_dir='/mnt/sdb/xiongbj/Objaverse'
 output_dir='data/Objaverse'
@@ -16,7 +16,7 @@ main.py \
 --log_dir ${log_dir} \
 --num_workers 8 \
 --total_uid_counts 8000000 \
---num_points 200000 \
+--num_points 100000 \
 --save_file_type "pointcloud" "data" "normal" \
 --resume \
 # --debug \

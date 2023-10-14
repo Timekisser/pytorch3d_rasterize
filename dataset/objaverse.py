@@ -26,12 +26,13 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		self.output_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
-		if self.args.debug and os.path.getsize(filename_obj) > 50 * 1024 * 1024:
-			# skip large mesh
+		if os.path.getsize(filename_obj) > 20 * 1024 * 1024:
+			print("Too large mesh.", flush=True)
 			return None, False
 		try:
 			scene = trimesh.load(filename_obj)
 		except:
+			print("Trimesh load mesh error.", flush=True)
 			return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
 		valid = False
@@ -76,7 +77,6 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		
 		geometry, valid = self.get_geometry(filename_obj)
 		if not valid:
-			print("Invalid geometry.", flush=True)
 			return None, valid
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
