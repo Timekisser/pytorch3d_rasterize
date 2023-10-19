@@ -1,6 +1,6 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-N_GPUS=4
-output_dir='data/ShapeNet'
+export CUDA_VISIBLE_DEVICES=2,3
+N_GPUS=2
+output_dir=/workspace/data/ShapeNet
 log_dir='logs'
 
 torchrun \
@@ -9,11 +9,11 @@ torchrun \
 main.py \
 --get_render_points \
 --dataset "ShapeNet" \
---shapenet_mesh_dir "data/ShapeNet/ShapeNetCore.v1" \
---shapenet_filelist_dir "data/ShapeNet/filelist" \
---output_dir "data/ShapeNet/" \
+--shapenet_mesh_dir ${output_dir}/ShapeNetCore.v1 \
+--shapenet_filelist_dir ${output_dir}/filelist \
+--output_dir ${output_dir} \
 --log_dir ${log_dir} \
---num_workers 8 \
+--num_workers 1 \
 --num_points 640000 \
 --image_size 1024 \
 --file_list "train_chair.txt" "test_chair.txt" \
