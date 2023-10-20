@@ -5,24 +5,14 @@ import os
 import trimesh
 import traceback
 import matplotlib.pyplot as plt
-from pytorch3d.io import IO
-from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
 	look_at_view_transform,
 	FoVPerspectiveCameras,
 	FoVOrthographicCameras,
-	Materials,
-	PointLights,
 	RasterizationSettings,
-	MeshRenderer,
-	MeshRasterizer,
-	SoftPhongShader,
-	SplatterPhongShader,
-	PointsRenderer,
 )
-from .opengl import MeshRasterizerOpenGL
+from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
-from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
 	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
@@ -41,7 +31,7 @@ class PointCloudRender(torch.nn.Module):
 
 		self.cameras = self.get_cameras()
 		self.rasterizer = None
-		self.shader = self.get_shader()
+		# self.shader = self.get_shader()
 		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
@@ -120,11 +110,11 @@ class PointCloudRender(torch.nn.Module):
 		self.rasterizer = self.get_rasterizer(meshes)
 
 		fragments = self.rasterizer(meshes)
-		if "image" in self.args.save_file_type:
-			images = self.shader(fragments, meshes)
-		else:
-			images = None
-		return fragments, images
+		# if "image" in self.args.save_file_type:
+		# 	images = self.shader(fragments, meshes)
+		# else:
+		# 	images = None
+		return fragments, None
 
 	def gen_image(self, images, uid):
 		save_dir = os.path.join(self.image_dir, uid)
@@ -155,7 +145,7 @@ class PointCloudRender(torch.nn.Module):
         # 	fragments.pix_to_face, fragments.bary_coords, faces_normals
     	# )
 
-		faces_normals = meshes.faces_normals_packed()
+		faces_normals = meshes
 		pixel_valid = fragments.pix_to_face != -1
 		pixel_normals = faces_normals[fragments.pix_to_face]
 		pixel_normals[pixel_valid.logical_not()] = 0
@@ -264,17 +254,19 @@ class PointCloudRender(torch.nn.Module):
 			if not valid:
 				continue
 			# print(f"Start render pointcloud of {uid}", flush=True)
-			try:
-				meshes = mesh.extend(self.num_views)
-				fragments, images = self.render(meshes, uid)
-				if "image" in self.args.save_file_type:
-					self.gen_image(images, uid)
+			# try:
+			meshes = mesh.extend(self.num_views)
+			fragments, images = self.render(meshes, uid)
+			# if "image" in self.args.save_file_type:
+			# 	self.gen_image(images, uid)
 
-				pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
-				if self.args.get_render_points:	
-					self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
-				if self.args.get_interior_points:
-					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-			except:
-				print(f"Render Error in mesh {uid}.", flush=True)
-				print(traceback.format_exc(), flush=True)
+			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
+			if self.args.get_render_points:	
+				self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
+			if self.args.get_interior_points:
+				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			# except:
+			# 	print(f"Render Error in mesh {uid}.", flush=True)
+			# 	print(traceback.format_exc(), flush=True)
+			# 	if self.args.debug:
+			# 		raise ValueError

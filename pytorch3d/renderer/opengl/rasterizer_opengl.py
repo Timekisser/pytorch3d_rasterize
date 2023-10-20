@@ -20,9 +20,9 @@ import torch.nn as nn
 
 from pytorch3d.structures.meshes import Meshes
 
-from pytorch3d.renderer.cameras import FoVOrthographicCameras, FoVPerspectiveCameras
-from pytorch3d.renderer.mesh.rasterizer import Fragments, RasterizationSettings
-from pytorch3d.renderer.utils import parse_image_size
+from ..cameras import FoVOrthographicCameras, FoVPerspectiveCameras
+from ..mesh.rasterizer import Fragments, RasterizationSettings
+from ..utils import parse_image_size
 
 from .opengl_utils import _torch_to_opengl, global_device_context_store
 

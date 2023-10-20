@@ -9,10 +9,8 @@ import random
 import numpy as np
 from tqdm import tqdm
 
-from pytorch3d.io import IO
-from pytorch3d.structures import Meshes, Pointclouds
+from pytorch3d.structures import Meshes 
 from pytorch3d.renderer import (
-	Textures,
 	TexturesUV,
 	TexturesVertex,
 )
@@ -108,10 +106,6 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			save_dir = os.path.join(self.output_dir, f"temp/{filename}/trimesh")
 			os.makedirs(save_dir, exist_ok=True)
 			trimesh.exchange.export.export_mesh(trimesh_mesh, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		if pytorch3d_mesh is not None:
-			save_dir = os.path.join(self.output_dir, f"temp/{filename}/pytorch3d")
-			os.makedirs(save_dir, exist_ok=True)
-			IO().save_mesh(pytorch3d_mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
 
 	def __len__(self):
 		return len(self.filelist.glbs)

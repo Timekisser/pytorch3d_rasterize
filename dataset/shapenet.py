@@ -9,7 +9,6 @@ import numpy as np
 from tqdm import tqdm
 import open3d as o3d
 import pytorch3d
-from pytorch3d.io import IO, load_obj
 from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
 	Textures,
@@ -137,7 +136,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
-
+		mesh._faces_normals_packed = torch.tensor(geometry.face_normals)
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
@@ -151,10 +150,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			save_dir = os.path.join(self.output_dir, f"temp/{filename}/trimesh")
 			os.makedirs(save_dir, exist_ok=True)
 			trimesh.exchange.export.export_mesh(trimesh_mesh, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		if pytorch3d_mesh is not None:
-			save_dir = os.path.join(self.output_dir, f"temp/{filename}/pytorch3d")
-			os.makedirs(save_dir, exist_ok=True)
-			IO().save_mesh(pytorch3d_mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+
 
 	def __len__(self):
 		return len(self.filelist.uids)
