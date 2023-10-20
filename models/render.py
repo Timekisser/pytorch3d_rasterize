@@ -20,7 +20,7 @@ from pytorch3d.renderer import (
 	SplatterPhongShader,
 	PointsRenderer,
 )
-from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
+from .opengl import MeshRasterizerOpenGL
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.cameras import try_get_projection_transform
 class PointCloudRender(torch.nn.Module):
