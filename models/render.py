@@ -98,13 +98,13 @@ class PointCloudRender(torch.nn.Module):
 		)
 		return rasterizer
 
-	def get_shader(self):
-		# The textured phong shader interpolates the texture uv coordinates for
-		# each vertex, and samples from a texture image.
-		# lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
-		shader = SplatterPhongShader(cameras=self.cameras, device=self.device)
-		# Create a mesh renderer by composing a rasterizer and a shader
-		return shader
+	# def get_shader(self):
+	# 	# The textured phong shader interpolates the texture uv coordinates for
+	# 	# each vertex, and samples from a texture image.
+	# 	# lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
+	# 	shader = SplatterPhongShader(cameras=self.cameras, device=self.device)
+	# 	# Create a mesh renderer by composing a rasterizer and a shader
+	# 	return shader
 	
 	def render(self, meshes, uid):
 		self.rasterizer = self.get_rasterizer(meshes)
@@ -145,7 +145,7 @@ class PointCloudRender(torch.nn.Module):
         # 	fragments.pix_to_face, fragments.bary_coords, faces_normals
     	# )
 
-		faces_normals = meshes
+		faces_normals = meshes._faces_normals_packed
 		pixel_valid = fragments.pix_to_face != -1
 		pixel_normals = faces_normals[fragments.pix_to_face]
 		pixel_normals[pixel_valid.logical_not()] = 0

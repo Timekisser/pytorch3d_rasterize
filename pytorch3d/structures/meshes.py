@@ -1526,6 +1526,7 @@ class Meshes:
             tex = self.textures.extend(N)
 
         new_meshes = self.__class__(verts=new_verts_list, faces=new_faces_list, textures=tex)
+        new_meshes._faces_normals_packed = self._faces_normals_packed
         return new_meshes
 
     def sample_textures(self, fragments):

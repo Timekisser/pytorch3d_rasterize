@@ -1,6 +1,6 @@
 export CUDA_VISIBLE_DEVICES=2,3
 N_GPUS=2
-output_dir=/workspace/data/ShapeNet
+output_dir=data/ShapeNet
 log_dir='logs'
 
 torchrun \

@@ -60,4 +60,3 @@ class _MeshFaceAreasNormals(Function):
             grad_areas, grad_normals, verts, faces
         )
         return grad_verts, None
-
