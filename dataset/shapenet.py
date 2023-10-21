@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 import open3d as o3d
 import pytorch3d
-from pytorch3d.structures import Meshes, Pointclouds
+from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
 	Textures,
 	TexturesUV,
