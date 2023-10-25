@@ -30,7 +30,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 	def get_geometry(self, filename):
 		filename_obj = os.path.join(self.mesh_dir, filename,  'model.obj')
 
-		geometry = trimesh.load(filename_obj, force="mesh", maintain_order=True)
+		geometry = trimesh.load(filename_obj, force="mesh")
 		# geometry = trimesh.util.concatenate(geometry.dump())
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
@@ -39,84 +39,6 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			self.save_obj(filename, trimesh_mesh=geometry)
 		return geometry, valid
 
-	def get_textures(self, visual, verts, faces):
-		material = visual.material
-		# TODO: whether the mesh is valid
-		maps, main_color, valid = None, None, True
-		if isinstance(material, trimesh.visual.material.SimpleMaterial):
-			if material.image is not None:
-				maps = material.image
-			else:
-				main_color = material.main_color
-		else:
-			if material.baseColorTexture is not None:
-				maps = material.baseColorTexture
-			elif material.baseColorFactor is not None:
-				main_color = material.baseColorFactor
-			else:
-				main_color = material.main_color
-		if maps is not None:
-			if maps.mode != 'RGB':
-				maps = maps.convert('RGB')
-			maps = torch.tensor(np.array(maps), dtype=torch.float)
-			maps = torch.div(maps, 255.0)
-			maps = maps.unsqueeze(0)
-			uvs = torch.tensor(visual.uv, dtype=torch.float).unsqueeze(0)
-			textures = TexturesUV(maps, faces, uvs, padding_mode="reflection")
-		elif main_color is not None:
-			vert_colors = torch.tensor(main_color, dtype=torch.float)
-			vert_colors = vert_colors[:3] / 255.
-			vert_colors = vert_colors.reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
-			textures = TexturesVertex(vert_colors)
-		return textures, valid
-
-	def barycentric_interpolation(self, points, values, interp_points):
-		# 计算重心坐标
-		v0 = interp_points - points[:, 0, :]
-		v1 = interp_points - points[:, 1, :]
-		v2 = interp_points - points[:, 2, :] 
-
-		s0 = np.linalg.norm(np.cross(v1, v2, axis=1), axis=1)
-		s1 = np.linalg.norm(np.cross(v2, v0, axis=1), axis=1)
-		s2 = np.linalg.norm(np.cross(v0, v1, axis=1), axis=1)
-		
-		S = s0 + s1 + s2
-		w0 = (s0 / S)[:, None]
-		w1 = (s1 / S)[:, None]
-		w2 = (s2 / S)[:, None]
-
-		# 计算插值值
-		interp_values = w0 * values[:, 0, :] + w1 * values[:, 1, :] + w2 * values[:, 2, :]
-
-		return interp_values
-
-	def gen_points(self, geometry, filename):
-		filename_pts = os.path.join(self.pointcloud_dir, filename, 'pointcloud.npz')
-		filename_ply = os.path.join(self.pointcloud_dir, filename, 'pointcloud.ply')
-		os.makedirs(os.path.dirname(filename_pts), exist_ok=True)
-
-		points, face_idx = trimesh.sample.sample_surface(geometry, self.args.num_points)
-		normals = geometry.face_normals[face_idx]
-		visual = geometry.visual
-		material = visual.material
-		if isinstance(material, trimesh.visual.material.SimpleMaterial):
-			if material.image is not None:
-				vertex_colors = material.to_color(visual.uv)  # (N, 3)
-				faces = geometry.faces[face_idx]              # (F, 3)
-				face_to_vertex = geometry.vertices[faces]     # (F, 3, 3)
-				face_vertex_color = vertex_colors[faces]      # (F, 3, 4)
-				colors = self.barycentric_interpolation(face_to_vertex, face_vertex_color, points)
-				colors = colors[..., :3] / 255.0
-			else:
-				colors = np.tile(material.main_color.reshape(1, -1), (points.shape[0], 1))
-		else:
-			raise Exception("Colors Error!")
-		
-		if "pointcloud" in self.args.save_file_type:
-			pointcloud = trimesh.PointCloud(vertices=points, colors=colors)
-			pointcloud.export(filename_ply, file_type="ply")
-		if "data" in self.args.save_file_type:
-			np.savez(filename_pts, points=points.astype(np.float16), normals=normals.astype(np.float16), colors=colors.astype(np.float16))
 
 	def load_mesh(self, filename):
 		geometry, valid = self.get_geometry(filename)
@@ -130,20 +52,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		scale = 2.0 / (bbmax - bbmin).max()
 		geometry.vertices = (vertices - center) * scale
 
-		# self.gen_points(geometry, filename)
-
-		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
-		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
-		textures, valid = self.get_textures(geometry.visual, verts, faces)
-		mesh = Meshes(verts, faces, textures)
-		mesh._faces_normals_packed = torch.tensor(geometry.face_normals)
-		if not valid:
-			print("Invalid texture type.", flush=True)
-			return None, valid
-
-		if "object" in self.args.save_file_type:
-			self.save_obj(filename, pytorch3d_mesh=mesh)
-		return mesh, valid
+		return geometry, valid
 
 	def save_obj(self, filename, trimesh_mesh=None, pytorch3d_mesh=None):
 		if trimesh_mesh is not None:

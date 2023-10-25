@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from pyrender import Mesh, Scene, Viewer, Node
 from pyrender import OrthographicCamera, PerspectiveCamera
 from pyrender import OffscreenRenderer, RenderFlags
+from scipy.spatial.transform import Rotation
+
 class PointCloudRender(torch.nn.Module):
 	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
@@ -24,114 +26,89 @@ class PointCloudRender(torch.nn.Module):
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
 
-		self.cameras = self.get_cameras_pyrender()
-		self.rasterizer = None
+		self.cameras = self.get_cameras()
+		self.renderer = OffscreenRenderer(viewport_width=image_size, viewport_height=image_size, point_size=1.0)
 		# self.shader = self.get_shader()
 		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
-		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
-		self.interior_dir = os.path.join(output_dir, "interior")
-		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
-			os.makedirs(dir, exist_ok=True)
-
-	def get_transform(self, cameras):
-
-		world_to_view_transform = cameras.get_world_to_view_transform()
-		to_ndc_transform = cameras.get_ndc_camera_transform()
-		projection_transform = try_get_projection_transform(cameras)
-		if projection_transform is not None:
-			projection_transform = projection_transform.compose(to_ndc_transform)
-			full_transform = world_to_view_transform.compose(projection_transform)
-		else:
-			# Call transform_points instead of explicitly composing transforms to handle
-			# the case, where camera class does not have a projection matrix form.
-			full_transform = cameras.get_full_projection_transform()
-		return full_transform
+		self.pointcloud_dir = os.path.join(output_dir, "pointcloud_test")
+		for dir in [self.image_dir, self.pointcloud_dir]:
+			os.makedirs(dir, exist_ok=True)	
 	
-	
-	def get_cameras_pyrender(self):
+	def get_cameras(self):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
-		R = 
+		
 		if self.args.camera_mode == "Orthographic":
 			cameras = []
-			for i in range(R.shape[0]):
-				cam = OrthographicCamera(xmag=3.0, ymag=3.0, znear=0.01, zfar=100.0)
-				nc = Node(camera=cam, matrix=(R[i] * T[i]).numpy())
+			for elev, azim in zip(self.elevation, self.azim_angle):
+				R = np.diag([0, 0, 0, 1.0])
+				T = np.diag([1, 1, 1, 1.0])
+				r = Rotation.from_euler('xyz', [elev / 180.0 * np.pi, azim / 180.0 * np.pi, 0.0])
+				R[:3, :3] = r.as_matrix()
+				T[2, 3] = self.camera_dist
+
+				cam = OrthographicCamera(xmag=1.2, ymag=1.2, znear=0.01, zfar=100.0)
+				nc = Node(camera=cam, matrix=np.dot(R, T))
 				cameras.append(nc)
 		else:
 			raise Exception("No such camera mode.")
 		return cameras
-
-	def get_rasterizer(self, meshes):
-		raster_settings = RasterizationSettings(
-			image_size=self.image_size,
-			blur_radius=0.0,
-			faces_per_pixel=self.args.faces_per_pixel,
-			bin_size=self.get_bin_size(meshes),
-			max_faces_per_bin=self.get_max_faces_per_bin(meshes),
-			cull_backfaces=self.args.cull_backfaces,
-		)
-		# Initialize rasterizer by using a MeshRasterizer class
-		rasterizer = MeshRasterizerOpenGL(
-			cameras=self.cameras,
-			raster_settings=raster_settings
-		)
-		return rasterizer
-
-	# def get_shader(self):
-	# 	# The textured phong shader interpolates the texture uv coordinates for
-	# 	# each vertex, and samples from a texture image.
-	# 	# lights = PointLights(device=device, location=[[0.0, 0.0, -3.0]])
-	# 	shader = SplatterPhongShader(cameras=self.cameras, device=self.device)
-	# 	# Create a mesh renderer by composing a rasterizer and a shader
-	# 	return shader
 	
-	def render(self, meshes, uid):
-		self.rasterizer = self.get_rasterizer(meshes)
+	def render(self, mesh, uid):
+		pyrender_mesh = Mesh.from_trimesh(mesh)
+		node_mesh = Node(mesh=pyrender_mesh, matrix=np.diag([1, 1, 1, 1]))
 
-		fragments = self.rasterizer(meshes)
-		# if "image" in self.args.save_file_type:
-		# 	images = self.shader(fragments, meshes)
-		# else:
-		# 	images = None
-		return fragments, None
+		color_list, position_list, normal_list = [], [], []
+		for cam_id, node_camera in enumerate(self.cameras):
+			scene = Scene(ambient_light=[1.0, 1.0, 1.0], bg_color=[-1.0, -1.0, -1.0, -1.0])
+			scene.add_node(node_camera)
+			scene.add_node(node_mesh)
+			color, normal = self.renderer.render(scene, flags=RenderFlags.FLAT | RenderFlags.FACE_NORMALS | RenderFlags.CLEAR | RenderFlags.SKIP_CULL_FACES)
+			position = self.renderer.render(scene, flags=RenderFlags.FRAGMENT | RenderFlags.NORMAL_ONLY | RenderFlags.SKIP_CULL_FACES)[0]
+			
+			if "image" in self.args.save_file_type:
+				save_dir = os.path.join(self.image_dir, uid)
+				os.makedirs(save_dir, exist_ok=True)
+				filename_png = os.path.join(save_dir, f"image_{cam_id}.png")
+				plt.cla()
+				plt.imshow(color)
+				plt.savefig(filename_png)
 
-	def gen_image(self, images, uid):
-		save_dir = os.path.join(self.image_dir, uid)
+			valid = np.logical_and(position[..., -1] > 0, color[..., -1] > 0)
+			color = color[valid]
+			position = position[valid]
+			normal = normal[valid]
+
+			color_list.append(color)
+			position_list.append(position)
+			normal_list.append(normal)
+		
+		colors = np.concatenate(color_list, axis=0)
+		positions = np.concatenate(position_list, axis=0)
+		normals = np.concatenate(normal_list, axis=0)
+
+		P = colors.shape[0]
+		random_indices = np.random.randint(0, P, size=(self.num_points, ))
+		points = positions[random_indices][..., :3]
+		normals = normals[random_indices][..., :3]
+		colors = colors[random_indices]
+		
+		pointcloud = trimesh.points.PointCloud(vertices=points[..., :3], colors=(colors * 255.).astype(np.uint8))
+		save_dir = os.path.join(self.pointcloud_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
-		# print("Saved image as " + str(save_dir), flush=True)
-		for i in range(self.num_views):
-			elev = self.elevation[i]
-			azim = self.azim_angle[i]
-			filename_png = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}.png")
-			plt.imshow(images[i, ..., :3].cpu().numpy())
-			plt.savefig(filename_png)
-			plt.cla()
+		filename_ply = os.path.join(save_dir, "pointcloud.ply")
+		filename_npy = os.path.join(save_dir, "pointcloud.npz")
 
-	def get_pixel_data(self, meshes, fragments):
-		verts = meshes.verts_packed()  # (N, V, 3)
-		faces = meshes.faces_packed()  # (N, F, 3)
-		# texels = meshes.sample_textures(fragments)
-		faces_verts = verts[faces]
-		pixel_coords_in_camera = interpolate_face_attributes(
-			fragments.pix_to_face, fragments.bary_coords, faces_verts
-		)
+		if "pointcloud" in self.args.save_file_type:
+			pointcloud.export(filename_ply, file_type="ply")
+		if "data" in self.args.save_file_type:
+			np.savez(filename_npy, points=points, normals=normals, colors=colors[..., :3])
+		if "normal" in self.args.save_file_type:
+			self.visualize_points_and_normals(points, normals, uid)
 
-		# 使用vertex normal插值出normal
-		# vertex_normals = meshes.verts_normals_packed()  # (V, 3)
-		# self.visualize_points_and_normals(verts.cpu().numpy(), vertex_normals.cpu().numpy(), "0000")
-		# faces_normals = vertex_normals[faces]
-		# pixel_normals = interpolate_face_attributes(
-        # 	fragments.pix_to_face, fragments.bary_coords, faces_normals
-    	# )
 
-		faces_normals = meshes._faces_normals_packed
-		pixel_valid = fragments.pix_to_face != -1
-		pixel_normals = faces_normals[fragments.pix_to_face]
-		pixel_normals[pixel_valid.logical_not()] = 0
-		return pixel_coords_in_camera, pixel_normals
 
 	def gen_pointcloud(self, fragments, meshes, pixel_coords_in_camera, pixel_normals, uid):
 		valid_v, valid_x, valid_y = torch.where(fragments.pix_to_face[:, :, :, 0] != -1)
@@ -189,11 +166,10 @@ class PointCloudRender(torch.nn.Module):
 			self.visualize_points_and_normals(points, normals, uid)
 	
 	def visualize_points_and_normals(self, points, normals, uid):
-		cameras = self.cameras.get_camera_center().cpu().numpy()
-		points_with_normals = np.concatenate([points + 0.01 * normals, points, cameras], axis=0)
-		colors = np.concatenate([np.array([[1, 0, 0]] * points.shape[0]), np.array([[0, 1, 0]] * points.shape[0]), np.array([[0, 0, 1]] * self.num_views)], axis=0) * 255.0
+		points_with_normals = np.concatenate([points + 0.01 * normals, points], axis=0)
+		colors = np.concatenate([np.array([[1, 0, 0]] * points.shape[0]), np.array([[0, 1, 0]] * points.shape[0])], axis=0) * 255.0
 		pointcloud = trimesh.points.PointCloud(vertices=points_with_normals, colors=colors)
-		save_dir = os.path.join(self.pointcloud_dir, uid, f"normals.ply")
+		save_dir = os.path.join(self.pointcloud_dir, uid, "normals.ply")
 		os.makedirs(os.path.dirname(save_dir), exist_ok=True)
 		pointcloud.export(save_dir, file_type="ply")
 
@@ -204,16 +180,8 @@ class PointCloudRender(torch.nn.Module):
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
 				continue
-			# print(f"Start render pointcloud of {uid}", flush=True)
 			# try:
-			meshes = mesh.extend(self.num_views)
-			fragments, images = self.render(meshes, uid)
-			# if "image" in self.args.save_file_type:
-			# 	self.gen_image(images, uid)
-
-			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
-			if self.args.get_render_points:	
-				self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
+			self.render(mesh, uid)
 			# except:
 			# 	print(f"Render Error in mesh {uid}.", flush=True)
 			# 	print(traceback.format_exc(), flush=True)
