@@ -39,21 +39,24 @@ class PointCloudRender(torch.nn.Module):
 	def get_cameras(self):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
-		
-		if self.args.camera_mode == "Orthographic":
-			cameras = []
-			for elev, azim in zip(self.elevation, self.azim_angle):
-				R = np.diag([0, 0, 0, 1.0])
-				T = np.diag([1, 1, 1, 1.0])
-				r = Rotation.from_euler('xyz', [elev / 180.0 * np.pi, azim / 180.0 * np.pi, 0.0])
-				R[:3, :3] = r.as_matrix()
-				T[2, 3] = self.camera_dist
 
+		cameras = []
+		for elev, azim in zip(self.elevation, self.azim_angle):
+			R = np.diag([0, 0, 0, 1.0])
+			T = np.diag([1, 1, 1, 1.0])
+			r = Rotation.from_euler('xyz', [elev / 180.0 * np.pi, azim / 180.0 * np.pi, 0.0])
+			R[:3, :3] = r.as_matrix()
+			T[2, 3] = self.camera_dist
+
+			if self.args.camera_mode == "Perspective":
+				cam = PerspectiveCamera(yfov = np.pi / 2.0)
+			elif self.args.camera_mode == "Orthographic":
 				cam = OrthographicCamera(xmag=1.2, ymag=1.2, znear=0.01, zfar=100.0)
-				nc = Node(camera=cam, matrix=np.dot(R, T))
-				cameras.append(nc)
-		else:
-			raise Exception("No such camera mode.")
+			else:
+				raise Exception("No such camera mode.")
+			nc = Node(camera=cam, matrix=np.dot(R, T))
+			cameras.append(nc)
+		
 		return cameras
 	
 	def render(self, mesh, uid):
@@ -76,7 +79,8 @@ class PointCloudRender(torch.nn.Module):
 				plt.imshow(color)
 				plt.savefig(filename_png)
 
-			valid = np.logical_and(position[..., -1] > 0, color[..., -1] > 0)
+			# valid = np.logical_and(position[..., -1] > 0, color[..., -1] > 0)
+			valid = position[..., -1] != -1
 			color = color[valid]
 			position = position[valid]
 			normal = normal[valid]
