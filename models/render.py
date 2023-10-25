@@ -5,14 +5,9 @@ import os
 import trimesh
 import traceback
 import matplotlib.pyplot as plt
-from pytorch3d.renderer import (
-	look_at_view_transform,
-	FoVPerspectiveCameras,
-	FoVOrthographicCameras,
-	RasterizationSettings,
-)
-from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
-from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
+from pyrender import Mesh, Scene, Viewer, Node
+from pyrender import OrthographicCamera, PerspectiveCamera
+from pyrender import OffscreenRenderer, RenderFlags
 class PointCloudRender(torch.nn.Module):
 	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
@@ -29,7 +24,7 @@ class PointCloudRender(torch.nn.Module):
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
 
-		self.cameras = self.get_cameras()
+		self.cameras = self.get_cameras_pyrender()
 		self.rasterizer = None
 		# self.shader = self.get_shader()
 		self.full_transform = None
@@ -53,34 +48,21 @@ class PointCloudRender(torch.nn.Module):
 			# the case, where camera class does not have a projection matrix form.
 			full_transform = cameras.get_full_projection_transform()
 		return full_transform
-
-	def get_cameras(self):
+	
+	
+	def get_cameras_pyrender(self):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
-		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
-		if self.args.camera_mode == "Perspective":
-			cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
-		elif self.args.camera_mode == "Orthographic":
-			cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
+		R = 
+		if self.args.camera_mode == "Orthographic":
+			cameras = []
+			for i in range(R.shape[0]):
+				cam = OrthographicCamera(xmag=3.0, ymag=3.0, znear=0.01, zfar=100.0)
+				nc = Node(camera=cam, matrix=(R[i] * T[i]).numpy())
+				cameras.append(nc)
 		else:
 			raise Exception("No such camera mode.")
 		return cameras
-
-	def get_bin_size(self, meshes):
-		if self.args.bin_mode == "coarse":
-			bin_size_face = int(2 ** np.floor(np.log2((meshes._F + 0.001) // 6) - 8))
-			bin_size_image = int(2 ** max(np.ceil(np.log2(self.image_size)) - 4, 4))
-			bin_size = max(bin_size_face, bin_size_image)
-		else:
-			bin_size = 0
-		return bin_size
-	
-	def get_max_faces_per_bin(self, meshes):
-		if self.args.bin_mode == "coarse":
-			max_faces_per_bin = int(meshes._F) * 2
-		else:
-			max_faces_per_bin = None
-		return max_faces_per_bin
 
 	def get_rasterizer(self, meshes):
 		raster_settings = RasterizationSettings(
@@ -216,37 +198,6 @@ class PointCloudRender(torch.nn.Module):
 		pointcloud.export(save_dir, file_type="ply")
 
 
-	def gen_interior_points(self, fragments, images, pixel_coords_in_camera, pixel_normals, uid):
-		pix_to_face = fragments.pix_to_face
-		V, H, W, F = pix_to_face.shape
-		valid_v, valid_x, valid_y, first_valid_f = torch.where(pix_to_face[:, :, :, :1] != -1)
-		last_pix_to_face = torch.cat([pix_to_face, -1 * torch.ones((V, H, W, 1), device=self.device)], dim=-1)
-		last_valid_f = torch.argmin(last_pix_to_face, dim=-1)[valid_v, valid_x, valid_y] - 1
-
-		first_pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, first_valid_f] # (P, 3)
-		last_pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, last_valid_f] # (P, 3)
-
-
-		P = first_pixel_coords.shape[0]
-		random_indices = torch.randint(0, P, size=(self.args.num_interior_points, ), device=self.device)
-		random_distances = torch.rand((self.args.num_interior_points, 1), device=self.device) * 0.9 + 0.05
-
-		points = first_pixel_coords[random_indices] * random_distances + last_pixel_coords[random_indices] * (1 - random_distances)
-
-		points = points.cpu().numpy()
-
-		pointcloud = trimesh.points.PointCloud(vertices=points)
-		save_dir = os.path.join(self.interior_dir, uid)
-		# print("Saved interior pointcloud as " + str(save_dir), flush=True)
-		os.makedirs(save_dir, exist_ok=True)
-		filename_ply = os.path.join(save_dir, "interior.ply")
-		filename_npy = os.path.join(save_dir, "interior.npz")
-
-		if "pointcloud" in self.args.save_file_type:
-			pointcloud.export(filename_ply, file_type="ply")
-		if "data" in self.args.save_file_type:
-			np.savez(filename_npy, points=points)	
-
 	def forward(self, batch):
 		# TODO: render by a batch
 		for data in batch:
@@ -263,8 +214,6 @@ class PointCloudRender(torch.nn.Module):
 			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
 			if self.args.get_render_points:	
 				self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
-			if self.args.get_interior_points:
-				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
 			# except:
 			# 	print(f"Render Error in mesh {uid}.", flush=True)
 			# 	print(traceback.format_exc(), flush=True)

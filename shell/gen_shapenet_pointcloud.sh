@@ -1,15 +1,16 @@
-export CUDA_VISIBLE_DEVICES=2,3
-N_GPUS=2
-output_dir=data/ShapeNet
+export CUDA_VISIBLE_DEVICES=0
+N_GPUS=1
+output_dir=/workspace/data/ShapeNet
 log_dir='logs'
 
-torchrun \
---rdzv_endpoint localhost:26500 \
---nproc_per_node=${N_GPUS} \
+# torchrun \
+# --rdzv_endpoint localhost:26500 \
+# --nproc_per_node=${N_GPUS} \
+python \
 main.py \
 --get_render_points \
 --dataset "ShapeNet" \
---shapenet_mesh_dir ${output_dir}/ShapeNetCore.v1 \
+--shapenet_mesh_dir /workspace/ShapeNetCore.v1 \
 --shapenet_filelist_dir ${output_dir}/filelist \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \
