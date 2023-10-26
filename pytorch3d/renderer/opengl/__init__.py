@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 # If we can access EGL, import MeshRasterizerOpenGL.
-def _can_import_egl_and_pycuda():
+def _can_import_egl():
     import os
     import warnings
 
@@ -21,17 +21,10 @@ def _can_import_egl_and_pycuda():
         )
         return False
 
-    try:
-        import pycuda.gl
-    except (ImportError, ImportError, ModuleNotFoundError):
-        warnings.warn("Can't import pycuda.gl, not importing MeshRasterizerOpenGL.")
-        return False
-
     return True
 
 
-if _can_import_egl_and_pycuda():
-    from .opengl_utils import EGLContext, global_device_context_store
+if _can_import_egl():
     from .rasterizer_opengl import MeshRasterizerOpenGL
 
 __all__ = [k for k in globals().keys() if not k.startswith("_")]

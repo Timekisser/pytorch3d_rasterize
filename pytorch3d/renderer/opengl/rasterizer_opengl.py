@@ -24,10 +24,6 @@ from ..cameras import FoVOrthographicCameras, FoVPerspectiveCameras
 from ..mesh.rasterizer import Fragments, RasterizationSettings
 from ..utils import parse_image_size
 
-from .opengl_utils import _torch_to_opengl, global_device_context_store
-
-from pyrender import Renderer
-
 os.environ['PYOPENGL_PLATFORM'] == 'egl'
 
 # Shader strings, used below to compile an OpenGL program.
