@@ -40,20 +40,6 @@ class PointCloudRender(torch.nn.Module):
 		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
 			os.makedirs(dir, exist_ok=True)
 
-	def get_transform(self, cameras):
-
-		world_to_view_transform = cameras.get_world_to_view_transform()
-		to_ndc_transform = cameras.get_ndc_camera_transform()
-		projection_transform = try_get_projection_transform(cameras)
-		if projection_transform is not None:
-			projection_transform = projection_transform.compose(to_ndc_transform)
-			full_transform = world_to_view_transform.compose(projection_transform)
-		else:
-			# Call transform_points instead of explicitly composing transforms to handle
-			# the case, where camera class does not have a projection matrix form.
-			full_transform = cameras.get_full_projection_transform()
-		return full_transform
-
 	def get_cameras(self):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
