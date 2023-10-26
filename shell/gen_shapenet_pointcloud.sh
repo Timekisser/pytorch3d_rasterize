@@ -13,12 +13,12 @@ main.py \
 --shapenet_filelist_dir ${output_dir}/filelist \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \
---num_workers 1 \
+--num_workers 8 \
 --num_points 640000 \
 --image_size 1024 \
 --file_list "train_chair.txt" "test_chair.txt" \
 --save_file_type "pointcloud" "data" \
---resume \
+# --resume \
 # --debug \
 # --camera_mode "Orthographic" \
 ######

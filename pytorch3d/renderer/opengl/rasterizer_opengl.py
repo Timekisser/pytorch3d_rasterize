@@ -323,8 +323,6 @@ class _OpenGLMachinery:
         elif os.environ['PYOPENGL_PLATFORM'] == 'egl':
             from pyrender.platforms import egl
             device_id = int(os.environ.get('EGL_DEVICE_ID', '0'))
-            for i in range(5):
-                print(egl.query_devices(), flush=True)
             egl_device = egl.get_device_by_index(device_id)
             self._platform = egl.EGLPlatform(self.viewport_width,
                                              self.viewport_height,
