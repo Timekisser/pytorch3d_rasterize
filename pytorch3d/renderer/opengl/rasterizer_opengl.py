@@ -13,7 +13,6 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 import OpenGL.GL as gl
-import pycuda.gl
 import torch
 import os
 import torch.nn as nn
@@ -360,12 +359,6 @@ class _OpenGLMachinery:
         """
         # Finish all current operations.
         torch.cuda.synchronize()
-        self.cuda_context.synchronize()
-
-        # Free pycuda resources.
-        self.cuda_context.push()
-        self.cuda_buffer.unregister()
-        self.cuda_context.pop()
 
         # Free GL resources.
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
@@ -379,7 +372,6 @@ class _OpenGLMachinery:
         del self.mesh_buffer_object
 
         gl.glDeleteProgram(self.program)
-        self.egl_context.release()
 
     def _projection_matrix_to_opengl(self, projection_matrix: torch.Tensor) -> None:
         """
