@@ -497,7 +497,7 @@ class _OpenGLMachinery:
             dim=-1,
         )
         barycentric_coords = torch.where(
-            barycentric_coords == 3, -1, barycentric_coords
+            barycentric_coords == 3.0, torch.tensor(-1.0, dtype=torch.float, device=verts_packed.device), barycentric_coords
         )
         depth = bary_depth_p2f[..., 2:3].squeeze(-1)
         pix_to_face = bary_depth_p2f[..., -1].long()

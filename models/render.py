@@ -35,7 +35,7 @@ class PointCloudRender(torch.nn.Module):
 		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
-		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
+		self.pointcloud_dir = os.path.join(output_dir, "pointcloud_test")
 		self.interior_dir = os.path.join(output_dir, "interior")
 		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
 			os.makedirs(dir, exist_ok=True)

@@ -18,7 +18,8 @@ from utils.distributed import (
 	synchronize,
 	get_world_size,
 )
-os.environ['CUDA_LAUNCH_BLOCKING']='1'
+os.environ['PYOPENGL_PLATFORM'] == 'egl'
+
 def build_dataloader(args):
 	if args.dataset == "Objaverse":
 		dataset = ObjaverseDataset(args)
