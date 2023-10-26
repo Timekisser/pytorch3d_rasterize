@@ -9,11 +9,6 @@ import random
 import numpy as np
 from tqdm import tqdm
 
-from pytorch3d.structures import Meshes 
-from pytorch3d.renderer import (
-	TexturesUV,
-	TexturesVertex,
-)
 
 class ObjaverseDataset(torch.utils.data.Dataset):
 	def __init__(self, args):

@@ -64,7 +64,7 @@ class PointCloudRender(torch.nn.Module):
 		node_mesh = Node(mesh=pyrender_mesh, matrix=np.diag([1, 1, 1, 1]))
 
 		color_list, position_list, normal_list = [], [], []
-		for cam_id, node_camera in enumerate(self.cameras):
+		for cam_id, node_camera in enumerate(self.cameras[::-1]):
 			scene = Scene(ambient_light=[1.0, 1.0, 1.0], bg_color=[-1.0, -1.0, -1.0, -1.0])
 			scene.add_node(node_camera)
 			scene.add_node(node_mesh)
@@ -76,7 +76,7 @@ class PointCloudRender(torch.nn.Module):
 				os.makedirs(save_dir, exist_ok=True)
 				filename_png = os.path.join(save_dir, f"image_{cam_id}.png")
 				plt.cla()
-				plt.imshow(color)
+				plt.imshow(np.clip(color, 0.0, 1.0))
 				plt.savefig(filename_png)
 
 			# valid = np.logical_and(position[..., -1] > 0, color[..., -1] > 0)

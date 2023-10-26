@@ -8,14 +8,6 @@ import pathlib
 import numpy as np
 from tqdm import tqdm
 import open3d as o3d
-import pytorch3d
-from pytorch3d.structures import Meshes
-from pytorch3d.renderer import (
-	Textures,
-	TexturesUV,
-	TexturesVertex,
-)
-
 
 class ShapeNetDataset(torch.utils.data.Dataset):
 	def __init__(self, args):
@@ -91,7 +83,7 @@ class ShapeNetFileList:
 		for file_list in self.args.file_list:
 			self.filenames += self.get_filenames(file_list)
 		self.uids = self.get_uids()
-		# self.uids = ['02958343/1ac8b8c486a77dbc65db4f1fb47e0c1d']
+		self.uids = ['02691156/10155655850468db78d106ce0a280f87']
 
 	def get_filenames(self, filelist):
 		filelist = os.path.join(self.filelist_dir, filelist)
