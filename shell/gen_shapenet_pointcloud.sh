@@ -1,5 +1,5 @@
-export CUDA_VISIBLE_DEVICES=2,3
-N_GPUS=2
+export CUDA_VISIBLE_DEVICES=0
+N_GPUS=1
 output_dir=data/ShapeNet
 log_dir='logs'
 
@@ -18,7 +18,7 @@ main.py \
 --image_size 1024 \
 --file_list "train_chair.txt" "test_chair.txt" \
 --save_file_type "pointcloud" "data" \
-# --resume \
+--resume \
 # --debug \
 # --camera_mode "Orthographic" \
 ######
