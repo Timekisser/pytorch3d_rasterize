@@ -35,7 +35,7 @@ class PointCloudRender(torch.nn.Module):
 		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
-		self.pointcloud_dir = os.path.join(output_dir, "pointcloud_test")
+		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
 		self.interior_dir = os.path.join(output_dir, "interior")
 		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
 			os.makedirs(dir, exist_ok=True)
@@ -240,19 +240,19 @@ class PointCloudRender(torch.nn.Module):
 			if not valid:
 				continue
 			# print(f"Start render pointcloud of {uid}", flush=True)
-			# try:
-			meshes = mesh.extend(self.num_views)
-			fragments, images = self.render(meshes, uid)
-			# if "image" in self.args.save_file_type:
-			# 	self.gen_image(images, uid)
+			try:
+				meshes = mesh.extend(self.num_views)
+				fragments, images = self.render(meshes, uid)
+				# if "image" in self.args.save_file_type:
+				# 	self.gen_image(images, uid)
 
-			pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
-			if self.args.get_render_points:	
-				self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
-			if self.args.get_interior_points:
-				self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
-			# except:
-			# 	print(f"Render Error in mesh {uid}.", flush=True)
-			# 	print(traceback.format_exc(), flush=True)
-			# 	if self.args.debug:
-			# 		raise ValueError
+				pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
+				if self.args.get_render_points:	
+					self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
+				if self.args.get_interior_points:
+					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+			except:
+				print(f"Render Error in mesh {uid}.", flush=True)
+				print(traceback.format_exc(), flush=True)
+				if self.args.debug:
+					raise ValueError

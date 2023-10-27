@@ -16,9 +16,9 @@ main.py \
 --num_workers 8 \
 --num_points 640000 \
 --image_size 1024 \
---file_list "train_chair.txt" "test_chair.txt" \
+--file_list "train_chair.txt" "test_chair.txt" "train_airplane.txt" "test_airplane.txt" "train_car.txt" "test_car.txt" \
 --save_file_type "pointcloud" "data" \
-# --resume \
+--resume \
 # --debug \
 # --camera_mode "Orthographic" \
 ######
