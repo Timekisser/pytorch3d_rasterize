@@ -18,7 +18,8 @@ from utils.distributed import (
 	synchronize,
 	get_world_size,
 )
-os.environ['PYOPENGL_PLATFORM'] == 'egl'
+os.environ['PYOPENGL_PLATFORM'] = 'egl'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def build_dataloader(args):
 	if args.dataset == "Objaverse":
@@ -62,7 +63,7 @@ def generate_pointcloud(args):
 		with torch.no_grad():
 			model(batch)
 
-		torch.cuda.empty_cache()
+		# torch.cuda.empty_cache()
 		# batch = fetcher.next()
 
 def shapenet_mesh_repair(args, num_processes=4):
@@ -141,12 +142,13 @@ if __name__ == "__main__":
 	parser.add_argument("--get_render_points", action="store_true")
 	parser.add_argument("--mesh_repair", action="store_true")
 	parser.add_argument("--cull_backfaces", action="store_true")
+	parser.add_argument("--save_memory", action="store_true")
 
 	args = parser.parse_args()
 
 	os.makedirs(args.log_dir, exist_ok=True)
 	sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), "w")
-	sys.stderr = open(os.path.join(args.log_dir, "stderr.txt"), "w")
+	# sys.stderr = open(os.path.join(args.log_dir, "stderr.txt"), "w")
 	
 	# init_distributed_mode(args)
 	n_gpu = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1

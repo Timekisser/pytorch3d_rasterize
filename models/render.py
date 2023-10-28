@@ -5,6 +5,7 @@ import os
 import trimesh
 import traceback
 import matplotlib.pyplot as plt
+import copy
 from pytorch3d.renderer import (
 	look_at_view_transform,
 	FoVPerspectiveCameras,
@@ -13,6 +14,8 @@ from pytorch3d.renderer import (
 )
 from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
+from pytorch3d.renderer.mesh.rasterizer import Fragments
+
 class PointCloudRender(torch.nn.Module):
 	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
@@ -28,10 +31,12 @@ class PointCloudRender(torch.nn.Module):
 
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
-
-		self.cameras = self.get_cameras()
+		if self.args.save_memory:
+			self.cameras_list = []
+			for elev, azim in zip(self.elevation, self.azim_angle):
+				self.cameras_list.append(self.get_cameras([elev], [azim]))
+		self.cameras = self.get_cameras(self.elevation, self.azim_angle)
 		self.rasterizer = None
-		# self.shader = self.get_shader()
 		self.full_transform = None
 		# Output dir
 		self.image_dir = os.path.join(output_dir, "image")
@@ -40,10 +45,10 @@ class PointCloudRender(torch.nn.Module):
 		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
 			os.makedirs(dir, exist_ok=True)
 
-	def get_cameras(self):
+	def get_cameras(self, elevation, azim_angle):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
-		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
+		R, T = look_at_view_transform(dist=self.camera_dist, elev=elevation, azim=azim_angle, device=self.device)
 		if self.args.camera_mode == "Perspective":
 			cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
 		elif self.args.camera_mode == "Orthographic":
@@ -68,7 +73,7 @@ class PointCloudRender(torch.nn.Module):
 			max_faces_per_bin = None
 		return max_faces_per_bin
 
-	def get_rasterizer(self, meshes):
+	def get_rasterizer(self, meshes, cameras):
 		raster_settings = RasterizationSettings(
 			image_size=self.image_size,
 			blur_radius=0.0,
@@ -79,7 +84,7 @@ class PointCloudRender(torch.nn.Module):
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizerOpenGL(
-			cameras=self.cameras,
+			cameras=cameras,
 			raster_settings=raster_settings
 		)
 		return rasterizer
@@ -92,10 +97,9 @@ class PointCloudRender(torch.nn.Module):
 	# 	# Create a mesh renderer by composing a rasterizer and a shader
 	# 	return shader
 	
-	def render(self, meshes, uid):
-		self.rasterizer = self.get_rasterizer(meshes)
-
-		fragments = self.rasterizer(meshes)
+	def render(self, meshes, uid, cameras):
+		rasterizer = self.get_rasterizer(meshes, cameras)
+		fragments = rasterizer(meshes)
 		# if "image" in self.args.save_file_type:
 		# 	images = self.shader(fragments, meshes)
 		# else:
@@ -122,14 +126,6 @@ class PointCloudRender(torch.nn.Module):
 		pixel_coords_in_camera = interpolate_face_attributes(
 			fragments.pix_to_face, fragments.bary_coords, faces_verts
 		)
-
-		# 使用vertex normal插值出normal
-		# vertex_normals = meshes.verts_normals_packed()  # (V, 3)
-		# self.visualize_points_and_normals(verts.cpu().numpy(), vertex_normals.cpu().numpy(), "0000")
-		# faces_normals = vertex_normals[faces]
-		# pixel_normals = interpolate_face_attributes(
-        # 	fragments.pix_to_face, fragments.bary_coords, faces_normals
-    	# )
 
 		faces_normals = meshes._faces_normals_packed
 		pixel_valid = fragments.pix_to_face != -1
@@ -241,12 +237,30 @@ class PointCloudRender(torch.nn.Module):
 				continue
 			# print(f"Start render pointcloud of {uid}", flush=True)
 			try:
+				if self.args.save_memory:
+					pixel_coords_in_camera, pixel_normals = [], []
+					fragments = []
+					meshes = copy.deepcopy(mesh).extend(1)
+					for camera in self.cameras_list:
+						fragment, images = self.render(meshes, uid, camera)
+						pixel_coord_in_camera, pixel_normal = self.get_pixel_data(meshes, fragment) 	# (N, P, K, 3)
+						pixel_coords_in_camera.append(pixel_coord_in_camera)
+						pixel_normals.append(pixel_normal)
+						fragments.append(fragment)
+					
+					fragments = Fragments(
+						pix_to_face=torch.cat([x.pix_to_face for x in fragments], dim=0),
+						zbuf=torch.cat([x.zbuf for x in fragments], dim=0),
+						bary_coords=torch.cat([x.bary_coords for x in fragments], dim=0),
+						dists=None,
+					)
+					pixel_coords_in_camera = torch.cat(pixel_coords_in_camera, dim=0)
+					pixel_normals = torch.cat(pixel_normals, dim=0)
+				else:
+					meshes = mesh.extend(self.num_views)
+					fragments, images = self.render(meshes, uid, self.cameras)
+					pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
 				meshes = mesh.extend(self.num_views)
-				fragments, images = self.render(meshes, uid)
-				# if "image" in self.args.save_file_type:
-				# 	self.gen_image(images, uid)
-
-				pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
 				if self.args.get_render_points:	
 					self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
 				if self.args.get_interior_points:

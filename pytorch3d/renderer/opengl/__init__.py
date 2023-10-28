@@ -24,7 +24,6 @@ def _can_import_egl():
     return True
 
 
-if _can_import_egl():
-    from .rasterizer_opengl import MeshRasterizerOpenGL
+from .rasterizer_opengl import MeshRasterizerOpenGL
 
 __all__ = [k for k in globals().keys() if not k.startswith("_")]

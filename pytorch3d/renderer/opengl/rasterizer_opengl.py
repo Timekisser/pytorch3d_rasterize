@@ -23,8 +23,6 @@ from ..cameras import FoVOrthographicCameras, FoVPerspectiveCameras
 from ..mesh.rasterizer import Fragments, RasterizationSettings
 from ..utils import parse_image_size
 
-os.environ['PYOPENGL_PLATFORM'] == 'egl'
-
 # Shader strings, used below to compile an OpenGL program.
 vertex_shader = """
 // The vertex shader does nothing.
@@ -474,7 +472,7 @@ class _OpenGLMachinery:
 
         # Create torch tensors containing the results.
         bary_depth_p2f = (
-            torch.frombuffer(bary_depth_p2f_gl, dtype=torch.float)
+            torch.tensor(np.frombuffer(bary_depth_p2f_gl, dtype=np.float32))
             .reshape(1, height, width, 1, -1)
             .to(verts_packed.device)
         )

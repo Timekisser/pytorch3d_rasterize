@@ -1,7 +1,7 @@
 export CUDA_VISIBLE_DEVICES=0
 N_GPUS=1
-output_dir=data/ShapeNet
-log_dir='logs'
+output_dir=/apdcephfs_cq3/share_1330077/bojunxiong/data/ShapeNet
+log_dir=/apdcephfs_cq3/share_1330077/bojunxiong/data/ShapeNet/logs
 
 torchrun \
 --rdzv_endpoint localhost:26500 \
@@ -18,7 +18,8 @@ main.py \
 --image_size 1024 \
 --file_list "train_chair.txt" "test_chair.txt" "train_airplane.txt" "test_airplane.txt" "train_car.txt" "test_car.txt" \
 --save_file_type "pointcloud" "data" \
---resume \
+--resume
+
 # --debug \
 # --camera_mode "Orthographic" \
 ######
