@@ -23,11 +23,12 @@ class PointCloudRender(torch.nn.Module):
 		self.image_size = image_size
 		self.camera_dist = camera_dist
 		self.batch_size = args.batch_size
-		self.elevation =  [0, 0,  0,   0,   -90, 90] + [-45, -45, -45, -45, 45, 45,  45,  45]
-		self.azim_angle = [0, 90, 180, 270, 0,   0]  + [45,  135, 225, 315, 45, 135, 225, 315]	
+		self.elevation =  [0, 0,  0,   0,   -90, 90] #+ [-45, -45, -45, -45, 45, 45,  45,  45]
+		self.azim_angle = [0, 90, 180, 270, 0,   0]  #+ [45,  135, 225, 315, 45, 135, 225, 315]	
 		self.num_views = len(self.elevation)
 		self.num_points = args.num_points
 		self.device = device
+		self.error_count = 0
 
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
@@ -151,14 +152,14 @@ class PointCloudRender(torch.nn.Module):
 		pixel_colors = pixel_colors[normals_valid]
 
 		P = pixel_coords.shape[0]
-		random_indices = torch.randint(0, P, size=(self.num_points, ), device=self.device)
+		random_indices = torch.randint(0, P, size=(self.num_points, ), device=pixel_coords_in_camera.device)
 		points = pixel_coords[random_indices]
 		normals = pixel_normals[random_indices]
 		normals = normals / torch.norm(normals, p=2, dim=1, keepdim=True)
 		colors = pixel_colors[random_indices]
 
 		# normal directions
-		camera_centers = self.cameras.get_camera_center()
+		camera_centers = self.cameras.get_camera_center().to(pixel_coords_in_camera.device)
 		camera_centers = camera_centers[valid_v][random_indices]
 		camera_vectors =  camera_centers - points
 		normals_negative = torch.sum(camera_vectors * normals, dim=1) < 0.0
@@ -248,25 +249,27 @@ class PointCloudRender(torch.nn.Module):
 						pixel_normals.append(pixel_normal)
 						fragments.append(fragment)
 					
+					device = "cpu"
 					fragments = Fragments(
-						pix_to_face=torch.cat([x.pix_to_face for x in fragments], dim=0),
-						zbuf=torch.cat([x.zbuf for x in fragments], dim=0),
-						bary_coords=torch.cat([x.bary_coords for x in fragments], dim=0),
+						pix_to_face=torch.cat([x.pix_to_face for x in fragments], dim=0).to(device),
+						zbuf=torch.cat([x.zbuf for x in fragments], dim=0).to(device),
+						bary_coords=torch.cat([x.bary_coords for x in fragments], dim=0).to(device),
 						dists=None,
 					)
-					pixel_coords_in_camera = torch.cat(pixel_coords_in_camera, dim=0)
-					pixel_normals = torch.cat(pixel_normals, dim=0)
+					pixel_coords_in_camera = torch.cat(pixel_coords_in_camera, dim=0).to(device)
+					pixel_normals = torch.cat(pixel_normals, dim=0).to(device)
+					meshes = mesh.to(device).extend(self.num_views)
 				else:
 					meshes = mesh.extend(self.num_views)
 					fragments, images = self.render(meshes, uid, self.cameras)
 					pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
-				meshes = mesh.extend(self.num_views)
 				if self.args.get_render_points:	
 					self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
 				if self.args.get_interior_points:
 					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
 			except:
-				print(f"Render Error in mesh {uid}.", flush=True)
+				self.error_count += 1
+				print(f"Error {self.error_count} in mesh {uid}.", flush=True)
 				print(traceback.format_exc(), flush=True)
 				if self.args.debug:
 					raise ValueError
