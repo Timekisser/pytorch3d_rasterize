@@ -39,21 +39,22 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		return geometry, valid
 	
 	def get_textures(self, visual, verts, faces):
-		material = visual.material
 		# TODO: whether the mesh is valid
-		maps, main_color, valid = None, None, True
-		if isinstance(material, trimesh.visual.material.SimpleMaterial):
-			if material.image is not None:
-				maps = material.image
+		maps, main_color, vertex_colors, valid = None, None, None, True
+		if isinstance(visual, trimesh.visual.color.ColorVisuals):
+			vertex_colors = visual.vertex_colors
+		elif isinstance(visual.material, trimesh.visual.material.SimpleMaterial):
+			if visual.material.image is not None:
+				maps = visual.material.image
 			else:
-				main_color = material.main_color
+				main_color = visual.material.main_color
 		else:
-			if material.baseColorTexture is not None:
-				maps = material.baseColorTexture
-			elif material.baseColorFactor is not None:
-				main_color = material.baseColorFactor
+			if visual.material.baseColorTexture is not None:
+				maps = visual.material.baseColorTexture
+			elif visual.material.baseColorFactor is not None:
+				main_color = visual.material.baseColorFactor
 			else:
-				main_color = material.main_color
+				main_color = visual.material.main_color
 		if maps is not None:
 			if maps.mode != 'RGB':
 				maps = maps.convert('RGB')
@@ -62,6 +63,11 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			maps = maps.unsqueeze(0)
 			uvs = torch.tensor(visual.uv, dtype=torch.float).unsqueeze(0)
 			textures = TexturesUV(maps, faces, uvs)
+		elif vertex_colors is not None:
+			vert_colors = torch.tensor(vertex_colors, dtype=torch.float)
+			vert_colors = vert_colors[:, :3] / 255.
+			vert_colors = vert_colors.reshape(1, -1, 3)
+			textures = TexturesVertex(vert_colors)	
 		elif main_color is not None:
 			vert_colors = torch.tensor(main_color, dtype=torch.float)
 			vert_colors = vert_colors[:3] / 255.
@@ -76,23 +82,23 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		geometry, valid = self.get_geometry(filename_obj)
 		if not valid:
 			return None, valid
+		vertices = geometry.vertices
+		bbmin, bbmax = vertices.min(0), vertices.max(0)
+		center = (bbmin + bbmax) * 0.5
+		scale = 2.0 / (bbmax - bbmin).max()
+		geometry.vertices = (vertices - center) * scale
+
 		verts = torch.tensor(geometry.vertices, dtype=torch.float).unsqueeze(0)
 		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
-
-		verts = mesh.verts_packed()
-		center = verts.mean(0)
-		scale = max((verts - center).abs().max(0)[0])
-		mesh.offset_verts_(-center)
-		mesh.scale_verts_((1.0 / float(scale)))
-
+		mesh._faces_normals_packed = torch.tensor(geometry.face_normals)
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
-		if "object" in self.args.save_file_type:
-			self.save_obj(filename_obj, trimesh_mesh=geometry, pytorch3d_mesh=mesh)
+
 		return mesh, valid
+
 
 	def copy_glb(self, filename_obj):
 		filename = os.path.basename(filename_obj)[:-4]
@@ -114,11 +120,22 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		uid = self.filelist.uids[idx]
 		filename_ply = os.path.join(self.args.output_dir, "pointcloud", uid, "pointcloud.npz")
 		if self.args.resume and os.path.exists(filename_ply):
-			print(f"Mesh {uid} has exists.", flush=True)
+			# print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
-			mesh, valid = self.load_mesh(self.filelist.glbs[uid])
-
+			if self.args.debug:
+				mesh, valid = self.load_mesh(self.filelist.glbs[uid])
+			else:
+				try:
+					mesh, valid = self.load_mesh(self.filelist.glbs[uid])
+				except:
+					import traceback
+					print(f"Load mesh {uid} error!")
+					print(traceback.format_exc(), flush=True)
+					mesh, valid = None, False
+		if mesh is not None and mesh._F == 0:
+			print("Empty mesh.", flush=True)
+			mesh, valid = None, False
 		return {
 			"mesh": mesh,
 			"uid": uid,
@@ -144,7 +161,7 @@ class ObjaverseFileList:
 
 		self.get_glbs()
 		random.shuffle(self.uids)
-		# self.get_filelists()
+		self.get_filelists()
 
 	def get_glbs(self):
 		self.uids = []
@@ -155,7 +172,6 @@ class ObjaverseFileList:
 		else:
 			all_uids = objaverse.load_uids()
 		# all_uids = ["abc586aa9b5f49f0a52c0d1fdccf52ee"]
-
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
 			glb_path = os.path.join(self.base_dir, filepath)
@@ -166,7 +182,8 @@ class ObjaverseFileList:
 			if len(self.uids) >= self.total_uid_counts:
 				break
 		# self.annotations = objaverse.load_annotations(self.uids)
-		processes = 1 #mp.cpu_count()
+		# self.uids = all_uids
+		processes = 24 #mp.cpu_count()
 		self.glbs = objaverse.load_objects(self.uids, processes)
 
 	def get_filelists(self):

@@ -1,8 +1,6 @@
-export CUDA_VISIBLE_DEVICES=4,5,6,7
-echo $CUDA_VISIBLE_DEVICES
-N_GPUS=4
-objaverse_dir='/mnt/sdc/weist/objaverse'
-# output_dir='/mnt/sdb/xiongbj/Objaverse'
+export CUDA_VISIBLE_DEVICES=0
+N_GPUS=1
+objaverse_dir='/apdcephfs_cq3/share_1330077/dataset/objaverse/hf-objaverse-v1'
 output_dir='data/Objaverse'
 log_dir='logs'
 
@@ -14,10 +12,10 @@ main.py \
 --objaverse_dir ${objaverse_dir} \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \
---num_workers 8 \
---total_uid_counts 8000000 \
---num_points 100000 \
---save_file_type "pointcloud" "data" "normal" \
+--num_workers 4 \
+--total_uid_counts 40000 \
+--num_points 200000 \
+--image_size 624 \
+--save_file_type "data" \
 --resume \
-# --debug \
-######
+####

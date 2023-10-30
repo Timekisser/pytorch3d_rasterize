@@ -140,8 +140,6 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			print("Invalid texture type.", flush=True)
 			return None, valid
 
-		if "object" in self.args.save_file_type:
-			self.save_obj(filename, pytorch3d_mesh=mesh)
 		return mesh, valid
 
 	def save_obj(self, filename, trimesh_mesh=None, pytorch3d_mesh=None):

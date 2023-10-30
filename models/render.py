@@ -23,8 +23,8 @@ class PointCloudRender(torch.nn.Module):
 		self.image_size = image_size
 		self.camera_dist = camera_dist
 		self.batch_size = args.batch_size
-		self.elevation =  [0, 0,  0,   0,   -90, 90] #+ [-45, -45, -45, -45, 45, 45,  45,  45]
-		self.azim_angle = [0, 90, 180, 270, 0,   0]  #+ [45,  135, 225, 315, 45, 135, 225, 315]	
+		self.elevation =  [0, 0,  0,   0,   -90, 90] + [-45, -45, -45, -45, 45, 45,  45,  45]
+		self.azim_angle = [0, 90, 180, 270, 0,   0]  + [45,  135, 225, 315, 45, 135, 225, 315]	
 		self.num_views = len(self.elevation)
 		self.num_points = args.num_points
 		self.device = device
@@ -79,9 +79,9 @@ class PointCloudRender(torch.nn.Module):
 			image_size=self.image_size,
 			blur_radius=0.0,
 			faces_per_pixel=self.args.faces_per_pixel,
-			bin_size=self.get_bin_size(meshes),
-			max_faces_per_bin=self.get_max_faces_per_bin(meshes),
 			cull_backfaces=self.args.cull_backfaces,
+			# bin_size=self.get_bin_size(meshes),
+			# max_faces_per_bin=self.get_max_faces_per_bin(meshes),
 		)
 		# Initialize rasterizer by using a MeshRasterizer class
 		rasterizer = MeshRasterizerOpenGL(
@@ -185,7 +185,7 @@ class PointCloudRender(torch.nn.Module):
 		if "pointcloud" in self.args.save_file_type:
 			pointcloud.export(filename_ply, file_type="ply")
 		if "data" in self.args.save_file_type:
-			np.savez(filename_npy, points=points, normals=normals, colors=colors)
+			np.savez(filename_npy, points=points.astype(np.float16), normals=normals.astype(np.float16), colors=colors.astype(np.float16))
 		if "normal" in self.args.save_file_type:
 			self.visualize_points_and_normals(points, normals, uid)
 	
@@ -235,8 +235,10 @@ class PointCloudRender(torch.nn.Module):
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
+				self.error_count += 1
+				print(f"Invalid {self.error_count} in mesh {uid}.", flush=True)
 				continue
-			# print(f"Start render pointcloud of {uid}", flush=True)
+			print(f"Start render pointcloud of {uid}", flush=True)
 			try:
 				if self.args.save_memory:
 					pixel_coords_in_camera, pixel_normals = [], []
