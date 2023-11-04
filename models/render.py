@@ -40,10 +40,10 @@ class PointCloudRender(torch.nn.Module):
 		self.rasterizer = None
 		self.full_transform = None
 		# Output dir
-		self.image_dir = os.path.join(output_dir, "image")
+		# self.image_dir = os.path.join(output_dir, "image")
 		self.pointcloud_dir = os.path.join(output_dir, "pointcloud")
-		self.interior_dir = os.path.join(output_dir, "interior")
-		for dir in [self.image_dir, self.pointcloud_dir, self.interior_dir]:
+		# self.interior_dir = os.path.join(output_dir, "interior")
+		for dir in [self.pointcloud_dir]:
 			os.makedirs(dir, exist_ok=True)
 
 	def get_cameras(self, elevation, azim_angle):
@@ -176,8 +176,10 @@ class PointCloudRender(torch.nn.Module):
 		ones = np.ones((colors.shape[0], 1))
 		colors_rgba = np.concatenate([colors, ones], axis=1)
 		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors_rgba)
-		save_dir = os.path.join(self.pointcloud_dir, uid)
-		# print("Saved pointcloud as " + str(save_dir), flush=True)
+		if self.args.dataset == "Objaverse":
+			save_dir = os.path.join(self.pointcloud_dir, uid[0], uid)
+		else:
+			save_dir = os.path.join(self.pointcloud_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
 		filename_ply = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")

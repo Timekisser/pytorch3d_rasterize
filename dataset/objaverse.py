@@ -24,7 +24,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 		self.output_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
-		if os.path.getsize(filename_obj) > 20 * 1024 * 1024:
+		if os.path.getsize(filename_obj) > 50 * 1024 * 1024:
 			print("Too large mesh.", flush=True)
 			return None, False
 		try:
@@ -33,6 +33,9 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			print("Trimesh load mesh error.", flush=True)
 			return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
+		if len(geometry.vertices) > 500000:
+			print(f"Too many face {len(geometry.vertices)}.", flush=True)
+			return None, False
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
@@ -160,7 +163,6 @@ class ObjaverseFileList:
 		self.annotations = []
 
 		self.get_glbs()
-		random.shuffle(self.uids)
 		self.get_filelists()
 
 	def get_glbs(self):
@@ -171,18 +173,23 @@ class ObjaverseFileList:
 				all_uids += cat_uids
 		else:
 			all_uids = objaverse.load_uids()
-		# all_uids = ["abc586aa9b5f49f0a52c0d1fdccf52ee"]
+		# all_uids = ["e8e3894bc66843b9b4012f08613f44f1"]
+		random.shuffle(all_uids)
+		exist_count = 0
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
 			glb_path = os.path.join(self.base_dir, filepath)
-			pointcloud_path = os.path.join(self.output_dir, "pointcloud", uid, "pointcloud.npz")
+			pointcloud_path = os.path.join(self.output_dir, "pointcloud", uid[0], uid, "pointcloud.npz")
 			if os.path.exists(glb_path):
+				if os.path.exists(pointcloud_path):
+					exist_count += 1
 				if not (self.args.resume and os.path.exists(pointcloud_path)):
 					self.uids.append(uid)
 			if len(self.uids) >= self.total_uid_counts:
 				break
 		# self.annotations = objaverse.load_annotations(self.uids)
 		# self.uids = all_uids
+		print(f"{exist_count} files exist.", flush=True)
 		processes = 24 #mp.cpu_count()
 		self.glbs = objaverse.load_objects(self.uids, processes)
 

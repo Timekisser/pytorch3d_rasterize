@@ -12,7 +12,7 @@ main.py \
 --objaverse_dir ${objaverse_dir} \
 --output_dir ${output_dir} \
 --log_dir ${log_dir} \
---num_workers 4 \
+--num_workers 2 \
 --total_uid_counts 40000 \
 --num_points 200000 \
 --image_size 624 \
