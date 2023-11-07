@@ -190,7 +190,7 @@ class ShapeNetFileList:
 
 	def get_uids(self):
 		uids = []
-		for filename in self.filenames:
+		for filename in tqdm(self.filenames):
 			if self.args.get_interior_points:
 				filepath = os.path.join(self.output_dir, "interior", filename, "interior.npz")
 			elif self.args.get_render_points:
