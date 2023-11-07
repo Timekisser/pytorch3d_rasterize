@@ -39,21 +39,22 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		return geometry, valid
 
 	def get_textures(self, visual, verts, faces):
-		material = visual.material
 		# TODO: whether the mesh is valid
-		maps, main_color, valid = None, None, True
-		if isinstance(material, trimesh.visual.material.SimpleMaterial):
-			if material.image is not None:
-				maps = material.image
+		maps, main_color, vertex_colors, valid = None, None, None, True
+		if isinstance(visual, trimesh.visual.color.ColorVisuals):
+			vertex_colors = visual.vertex_colors
+		elif isinstance(visual.material, trimesh.visual.material.SimpleMaterial):
+			if visual.material.image is not None:
+				maps = visual.material.image
 			else:
-				main_color = material.main_color
+				main_color = visual.material.main_color
 		else:
-			if material.baseColorTexture is not None:
-				maps = material.baseColorTexture
-			elif material.baseColorFactor is not None:
-				main_color = material.baseColorFactor
+			if visual.material.baseColorTexture is not None:
+				maps = visual.material.baseColorTexture
+			elif visual.material.baseColorFactor is not None:
+				main_color = visual.material.baseColorFactor
 			else:
-				main_color = material.main_color
+				main_color = visual.material.main_color
 		if maps is not None:
 			if maps.mode != 'RGB':
 				maps = maps.convert('RGB')
@@ -61,13 +62,18 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			maps = torch.div(maps, 255.0)
 			maps = maps.unsqueeze(0)
 			uvs = torch.tensor(visual.uv, dtype=torch.float).unsqueeze(0)
-			textures = TexturesUV(maps, faces, uvs, padding_mode="reflection")
+			textures = TexturesUV(maps, faces, uvs)
+		elif vertex_colors is not None:
+			vert_colors = torch.tensor(vertex_colors, dtype=torch.float)
+			vert_colors = vert_colors[:, :3] / 255.
+			vert_colors = vert_colors.reshape(1, -1, 3)
+			textures = TexturesVertex(vert_colors)	
 		elif main_color is not None:
 			vert_colors = torch.tensor(main_color, dtype=torch.float)
 			vert_colors = vert_colors[:3] / 255.
 			vert_colors = vert_colors.reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
 			textures = TexturesVertex(vert_colors)
-		return textures, valid
+		return textures, valid	
 
 	def barycentric_interpolation(self, points, values, interp_points):
 		# 计算重心坐标
