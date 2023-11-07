@@ -277,3 +277,5 @@ class PointCloudRender(torch.nn.Module):
 				print(traceback.format_exc(), flush=True)
 				if self.args.debug:
 					raise ValueError
+				with open(os.path.join(self.args.log_dir, "error_uids.txt"), "a+") as f:
+					f.writelines(uid+'\n')
