@@ -33,9 +33,9 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			print("Trimesh load mesh error.", flush=True)
 			return None, False
 		geometry = trimesh.util.concatenate(scene.dump())
-		if len(geometry.vertices) > 500000:
-			print(f"Too many face {len(geometry.vertices)}.", flush=True)
-			return None, False
+		# if len(geometry.vertices) > 500000:
+		# 	print(f"Too many face {len(geometry.vertices)}.", flush=True)
+		# 	return None, False
 		valid = False
 		if isinstance(geometry, trimesh.Trimesh):
 			valid = True
@@ -174,7 +174,14 @@ class ObjaverseFileList:
 		else:
 			all_uids = objaverse.load_uids()
 		# all_uids = ["e8e3894bc66843b9b4012f08613f44f1"]
-		random.shuffle(all_uids)
+		
+		with open(os.path.join(self.args.log_dir, "error_uids.txt"), "r+") as f:
+			error_uids = f.read().splitlines()
+		# random.shuffle(all_uids)
+		all_uids = set(all_uids)
+		error_uids = set(error_uids)
+		all_uids -= error_uids
+
 		exist_count = 0
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
