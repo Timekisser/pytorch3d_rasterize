@@ -16,8 +16,10 @@ cap3d_uids = cap3d_filelist["uid"].to_list()
 total_length = 8000000
 uids = []
 for uid in tqdm(cap3d_uids):
-    if os.path.exists(os.path.join(output_dir, "pointcloud", uid[0], uid, "pointcloud.npz")):
-        uids.append(f"{uid[0]}/{uid}")
+    # filename = f"{uid[0]}/{uid}"
+    filename = uid
+    if os.path.exists(os.path.join(output_dir, "pointcloud_20w", filename, "pointcloud.npz")):
+        uids.append(filename)
         if len(uids) > total_length:
             break
 

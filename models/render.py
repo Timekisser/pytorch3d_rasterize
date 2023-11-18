@@ -254,7 +254,7 @@ class PointCloudRender(torch.nn.Module):
 				self.error_count += 1
 				print(f"Invalid {self.error_count} in mesh {uid}.", flush=True)
 				continue
-			print(f"Start render pointcloud of {uid}", flush=True)
+			# print(f"Start render pointcloud of {uid}", flush=True)
 			try:
 				if self.args.save_memory:
 					pixel_coords_in_camera, pixel_normals = [], []
