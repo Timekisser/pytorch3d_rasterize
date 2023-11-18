@@ -6,6 +6,8 @@ import trimesh
 import traceback
 import matplotlib.pyplot as plt
 import copy
+import cv2
+from PIL import Image
 from pytorch3d.renderer import (
 	look_at_view_transform,
 	FoVPerspectiveCameras,
@@ -40,20 +42,28 @@ class PointCloudRender(torch.nn.Module):
 		self.rasterizer = None
 		self.full_transform = None
 		# Output dir
-		# self.image_dir = os.path.join(output_dir, "image")
-		self.pointcloud_dir = os.path.join(output_dir, self.args.output_folder)
-		# self.interior_dir = os.path.join(output_dir, "interior")
-		for dir in [self.pointcloud_dir]:
+		output_dir_list = []
+		if "image" in self.args.save_file_type:
+			self.image_dir = os.path.join(output_dir, "image")
+			output_dir_list.append(self.image_dir)
+		if "pointcloud" in self.args.save_file_type:
+			self.pointcloud_dir = os.path.join(output_dir, self.args.output_folder)
+			output_dir_list.append(self.pointcloud_dir)
+		for dir in output_dir_list:
 			os.makedirs(dir, exist_ok=True)
 
 	def get_cameras(self, elevation, azim_angle):
 	   	# Initialize the camera with camera distance, elevation, azimuth angle,
 		# and image size
+		scale = 1.2
 		R, T = look_at_view_transform(dist=self.camera_dist, elev=elevation, azim=azim_angle, device=self.device)
 		if self.args.camera_mode == "Perspective":
 			cameras = FoVPerspectiveCameras(R=R, T=T, device=self.device)
 		elif self.args.camera_mode == "Orthographic":
-			cameras = FoVOrthographicCameras(R=R, T = T, device=self.device)
+			cameras = FoVOrthographicCameras(
+				R=R, T = T, device=self.device,
+				max_x=scale, min_x=-scale, max_y=scale, min_y=-scale,
+			)
 		else:
 			raise Exception("No such camera mode.")
 		return cameras
@@ -105,9 +115,11 @@ class PointCloudRender(torch.nn.Module):
 		# 	images = self.shader(fragments, meshes)
 		# else:
 		# 	images = None
-		return fragments, None
+		return fragments
 
-	def gen_image(self, images, uid):
+	def gen_image(self, fragments, images, uid):
+		images[fragments.pix_to_face[:, :, :, 0] == -1, :] = 1.0
+		images = (images * 255.0).to(torch.uint8).cpu().numpy()
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
 		# print("Saved image as " + str(save_dir), flush=True)
@@ -115,9 +127,11 @@ class PointCloudRender(torch.nn.Module):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]
 			filename_png = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}.png")
-			plt.imshow(images[i, ..., :3].cpu().numpy())
-			plt.savefig(filename_png)
-			plt.cla()
+			im = Image.fromarray(images[i, ..., :3], mode="RGB")
+			im.save(filename_png)
+			# plt.imshow(images[i, ..., :3].cpu().numpy())
+			# plt.savefig(filename_png)
+			# plt.cla()
 
 	def get_pixel_data(self, meshes, fragments):
 		verts = meshes.verts_packed()  # (N, V, 3)
@@ -134,13 +148,13 @@ class PointCloudRender(torch.nn.Module):
 		pixel_normals[pixel_valid.logical_not()] = 0
 		return pixel_coords_in_camera, pixel_normals
 
-	def gen_pointcloud(self, fragments, meshes, pixel_coords_in_camera, pixel_normals, uid):
+	def gen_pointcloud(self, fragments, pixel_coords_in_camera, pixel_normals, texels, uid):
 		valid_v, valid_x, valid_y = torch.where(fragments.pix_to_face[:, :, :, 0] != -1)
 		if valid_v.shape[0] == 0:
 			raise Exception("Empty mesh.")
 		pixel_coords = pixel_coords_in_camera[valid_v, valid_x, valid_y, 0] # (P, 3)
 		pixel_normals = pixel_normals[valid_v, valid_x, valid_y, 0]	# (P, 3)
-		texels = meshes.sample_textures(fragments).squeeze(-2)
+		
 		pixel_colors = texels[valid_v, valid_x, valid_y, :]	# (P, 3)
 
 		# 正常来说得到的法向量norm都应该是1
@@ -247,7 +261,7 @@ class PointCloudRender(torch.nn.Module):
 					fragments = []
 					meshes = copy.deepcopy(mesh).extend(1)
 					for camera in self.cameras_list:
-						fragment, images = self.render(meshes, uid, camera)
+						fragment = self.render(meshes, uid, camera)
 						pixel_coord_in_camera, pixel_normal = self.get_pixel_data(meshes, fragment) 	# (N, P, K, 3)
 						pixel_coords_in_camera.append(pixel_coord_in_camera)
 						pixel_normals.append(pixel_normal)
@@ -265,12 +279,15 @@ class PointCloudRender(torch.nn.Module):
 					meshes = mesh.to(device).extend(self.num_views)
 				else:
 					meshes = mesh.extend(self.num_views)
-					fragments, images = self.render(meshes, uid, self.cameras)
+					fragments = self.render(meshes, uid, self.cameras)
 					pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
-				if self.args.get_render_points:	
-					self.gen_pointcloud(fragments, meshes, pixel_coords_in_camera, pixel_normals, uid)
-				if self.args.get_interior_points:
-					self.gen_interior_points(fragments, images, pixel_coords_in_camera, pixel_normals, uid)
+				
+				texels = meshes.sample_textures(fragments).squeeze(-2)	
+				if "image" in self.args.save_file_type:
+					self.gen_image(fragments, texels, uid)
+				if "pointcloud" in self.args.save_file_type:
+					self.gen_pointcloud(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
+
 			except:
 				self.error_count += 1
 				print(f"Error {self.error_count} in mesh {uid}.", flush=True)
