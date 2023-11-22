@@ -22,7 +22,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		self.args = args
 		self.device = args.device
 		self.output_dir = args.output_dir
-		self.pointcloud_dir = os.path.join(self.output_dir, self.args.output_folder)
+		self.pointcloud_dir = os.path.join(self.output_dir, self.args.pointcloud_folder)
 		self.mesh_dir = args.shapenet_mesh_dir
 		self.filelist = ShapeNetFileList(args, args.total_uid_counts)
 
@@ -197,9 +197,20 @@ class ShapeNetFileList:
 	def get_uids(self):
 		uids = []
 		for filename in tqdm(self.filenames):
-			if self.args.get_render_points:
-				filepath = os.path.join(self.output_dir, self.args.output_folder, filename, "pointcloud.npz")
-			if self.args.resume == False or os.path.exists(filepath) == False:
+			if "data" in self.args.save_file_type:
+				filepath_pointcloud = os.path.join(self.output_dir, self.args.pointcloud_folder, filename, "pointcloud.npz")
+			if "image" in self.args.save_file_type:
+				filepath_image = os.path.join(self.output_dir, self.args.image_folder, filename)
+			if self.args.resume == True:
+				uid_exists = True
+				if not os.path.exists(filepath_pointcloud):
+					uid_exists = False
+				if not os.path.exists(filepath_image):
+					uid_exists = False
+				if not uid_exists:
+					uids.append(filename)
+			else:
 				uids.append(filename)
+				
 		return uids
 

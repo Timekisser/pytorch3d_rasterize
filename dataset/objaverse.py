@@ -121,8 +121,8 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		filename_ply = os.path.join(self.args.output_dir, self.args.output_folder, uid, "pointcloud.npz")
-		if self.args.resume and os.path.exists(filename_ply):
+		filename_pointcloud = os.path.join(self.args.output_dir, self.args.pointcloud_folder, uid, "pointcloud.npz")
+		if self.args.resume and os.path.exists(filename_pointcloud):
 			# print(f"Mesh {uid} has exists.", flush=True)
 			mesh, valid = None, False
 		else:
@@ -186,7 +186,7 @@ class ObjaverseFileList:
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
 			glb_path = os.path.join(self.base_dir, filepath)
-			pointcloud_path = os.path.join(self.output_dir, self.args.output_folder, uid[0], uid, "pointcloud.npz")
+			pointcloud_path = os.path.join(self.output_dir, self.args.pointcloud_folder, uid[0], uid, "pointcloud.npz")
 			if os.path.exists(glb_path):
 				if os.path.exists(pointcloud_path):
 					exist_count += 1

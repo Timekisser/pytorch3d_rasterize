@@ -44,10 +44,10 @@ class PointCloudRender(torch.nn.Module):
 		# Output dir
 		output_dir_list = []
 		if "image" in self.args.save_file_type:
-			self.image_dir = os.path.join(output_dir, "image")
+			self.image_dir = os.path.join(output_dir, self.args.image_folder)
 			output_dir_list.append(self.image_dir)
 		if "pointcloud" in self.args.save_file_type:
-			self.pointcloud_dir = os.path.join(output_dir, self.args.output_folder)
+			self.pointcloud_dir = os.path.join(output_dir, self.args.pointcloud_folder)
 			output_dir_list.append(self.pointcloud_dir)
 		for dir in output_dir_list:
 			os.makedirs(dir, exist_ok=True)
@@ -118,7 +118,13 @@ class PointCloudRender(torch.nn.Module):
 		return fragments
 
 	def gen_image(self, fragments, images, uid):
-		images[fragments.pix_to_face[:, :, :, 0] == -1, :] = 1.0
+		valid = fragments.pix_to_face[:, :, :, 0] != -1
+		images[valid.logical_not(), :] = 1.0
+		alpha = torch.zeros(images.shape[:3], device=images.device).unsqueeze(-1)
+		alpha[valid] = 1.0
+		images = torch.cat([images, alpha], dim=-1)
+
+
 		images = (images * 255.0).to(torch.uint8).cpu().numpy()
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
@@ -127,11 +133,8 @@ class PointCloudRender(torch.nn.Module):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]
 			filename_png = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}.png")
-			im = Image.fromarray(images[i, ..., :3], mode="RGB")
+			im = Image.fromarray(images[i, ...], mode="RGBA")
 			im.save(filename_png)
-			# plt.imshow(images[i, ..., :3].cpu().numpy())
-			# plt.savefig(filename_png)
-			# plt.cla()
 
 	def get_pixel_data(self, meshes, fragments):
 		verts = meshes.verts_packed()  # (N, V, 3)

@@ -119,7 +119,8 @@ if __name__ == "__main__":
 	parser.add_argument("--debug", action="store_true")
 	parser.add_argument("--total_uid_counts", default=8000000, type=int)
 	parser.add_argument("--output_dir", default='data/Objaverse', type=str)
-	parser.add_argument("--output_folder", default='pointcloud', type=str)
+	parser.add_argument("--pointcloud_folder", default='pointcloud', type=str)
+	parser.add_argument("--image_folder", default='image', type=str)
 	# Objaverse
 	parser.add_argument("--have_category", action="store_true")
 	parser.add_argument("--objaverse_dir", default="/mnt/sdc/weist/objaverse", type=str)
