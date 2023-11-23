@@ -160,12 +160,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		filename_ply = os.path.join(self.pointcloud_dir, uid, "pointcloud.npz")
-		if self.args.resume and os.path.exists(filename_ply):
-			print(f"Mesh {uid} has exists.", flush=True)
-			mesh, valid = None, False
-		else:
-			mesh, valid = self.load_mesh(uid)
+		
+		mesh, valid = self.load_mesh(uid)
 		return {
 			"mesh": mesh,
 			"uid": uid,
@@ -197,10 +193,8 @@ class ShapeNetFileList:
 	def get_uids(self):
 		uids = []
 		for filename in tqdm(self.filenames):
-			if "data" in self.args.save_file_type:
-				filepath_pointcloud = os.path.join(self.output_dir, self.args.pointcloud_folder, filename, "pointcloud.npz")
-			if "image" in self.args.save_file_type:
-				filepath_image = os.path.join(self.output_dir, self.args.image_folder, filename)
+			filepath_pointcloud = os.path.join(self.output_dir, self.args.pointcloud_folder, filename, "pointcloud.npz")
+			filepath_image = os.path.join(self.output_dir, self.args.image_folder, filename)
 			if self.args.resume == True:
 				uid_exists = True
 				if not os.path.exists(filepath_pointcloud):
