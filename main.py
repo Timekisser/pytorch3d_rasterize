@@ -18,7 +18,9 @@ from utils.distributed import (
 	synchronize,
 	get_world_size,
 )
+import traceback
 os.environ['PYOPENGL_PLATFORM'] = 'egl'
+# os.environ['MESA_GL_VERSION_OVERRIDE'] = '3.3'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def build_dataloader(args):
@@ -40,7 +42,7 @@ def build_dataloader(args):
 	)
 	return data_loader
 
-def mesh_to_cuda(batch,device):
+def mesh_to_cuda(batch, device):
 	for data in batch:
 		if data['mesh'] is not None:
 			data['mesh'] = data['mesh'].to(device)
@@ -58,10 +60,22 @@ def generate_pointcloud(args):
 	# fetcher = DataPreFetcher(data_loader, args.device)
 	# batch = fetcher.next()
 	# for i in range(len(data_loader)):
+	error_count = 0
 	for batch in tqdm(data_loader):
-		mesh_to_cuda(batch, model.device)
-		with torch.no_grad():
-			model(batch)
+		try:
+			mesh_to_cuda(batch, model.device)
+			with torch.no_grad():
+				model(batch)
+		except:
+			uid = batch[0]['uid']
+			error_count += 1
+			print(f"Error {error_count} in mesh {uid}.", flush=True)
+			print(traceback.format_exc(), flush=True)
+			if args.debug:
+				raise ValueError
+			with open(os.path.join(args.log_dir, "error_uids.txt"), "a+") as f:
+				f.writelines(uid+'\n')
+		
 
 		# torch.cuda.empty_cache()
 		# batch = fetcher.next()
@@ -140,8 +154,6 @@ if __name__ == "__main__":
 	parser.add_argument("--image_size", default=600, type=int)	
 	parser.add_argument("--points_dilate", default=0.005, type=float)
 	parser.add_argument("--faces_per_pixel", default=1, type=int)
-	parser.add_argument("--get_interior_points", action="store_true")
-	parser.add_argument("--get_render_points", action="store_true")
 	parser.add_argument("--mesh_repair", action="store_true")
 	parser.add_argument("--cull_backfaces", action="store_true")
 	parser.add_argument("--save_memory", action="store_true")

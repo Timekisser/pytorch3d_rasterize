@@ -257,45 +257,36 @@ class PointCloudRender(torch.nn.Module):
 				self.error_count += 1
 				print(f"Invalid {self.error_count} in mesh {uid}.", flush=True)
 				continue
-			# print(f"Start render pointcloud of {uid}", flush=True)
-			try:
-				if self.args.save_memory:
-					pixel_coords_in_camera, pixel_normals = [], []
-					fragments = []
-					meshes = copy.deepcopy(mesh).extend(1)
-					for camera in self.cameras_list:
-						fragment = self.render(meshes, uid, camera)
-						pixel_coord_in_camera, pixel_normal = self.get_pixel_data(meshes, fragment) 	# (N, P, K, 3)
-						pixel_coords_in_camera.append(pixel_coord_in_camera)
-						pixel_normals.append(pixel_normal)
-						fragments.append(fragment)
-					
-					device = "cpu"
-					fragments = Fragments(
-						pix_to_face=torch.cat([x.pix_to_face for x in fragments], dim=0).to(device),
-						zbuf=torch.cat([x.zbuf for x in fragments], dim=0).to(device),
-						bary_coords=torch.cat([x.bary_coords for x in fragments], dim=0).to(device),
-						dists=None,
-					)
-					pixel_coords_in_camera = torch.cat(pixel_coords_in_camera, dim=0).to(device)
-					pixel_normals = torch.cat(pixel_normals, dim=0).to(device)
-					meshes = mesh.to(device).extend(self.num_views)
-				else:
-					meshes = mesh.extend(self.num_views)
-					fragments = self.render(meshes, uid, self.cameras)
-					pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
+			print(f"Start render pointcloud of {uid}", flush=True)
+			if self.args.save_memory:
+				pixel_coords_in_camera, pixel_normals = [], []
+				fragments = []
+				meshes = copy.deepcopy(mesh).extend(1)
+				for camera in self.cameras_list:
+					fragment = self.render(meshes, uid, camera)
+					pixel_coord_in_camera, pixel_normal = self.get_pixel_data(meshes, fragment) 	# (N, P, K, 3)
+					pixel_coords_in_camera.append(pixel_coord_in_camera)
+					pixel_normals.append(pixel_normal)
+					fragments.append(fragment)
 				
-				texels = meshes.sample_textures(fragments).squeeze(-2)	
-				if "image" in self.args.save_file_type:
-					self.gen_image(fragments, texels, uid)
-				if "pointcloud" in self.args.save_file_type:
-					self.gen_pointcloud(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
+				device = "cpu"
+				fragments = Fragments(
+					pix_to_face=torch.cat([x.pix_to_face for x in fragments], dim=0).to(device),
+					zbuf=torch.cat([x.zbuf for x in fragments], dim=0).to(device),
+					bary_coords=torch.cat([x.bary_coords for x in fragments], dim=0).to(device),
+					dists=None,
+				)
+				pixel_coords_in_camera = torch.cat(pixel_coords_in_camera, dim=0).to(device)
+				pixel_normals = torch.cat(pixel_normals, dim=0).to(device)
+				meshes = mesh.to(device).extend(self.num_views)
+			else:
+				meshes = mesh.extend(self.num_views)
+				fragments = self.render(meshes, uid, self.cameras)
+				pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
+			
+			texels = meshes.sample_textures(fragments).squeeze(-2)	
+			if "image" in self.args.save_file_type:
+				self.gen_image(fragments, texels, uid)
+			if "pointcloud" in self.args.save_file_type:
+				self.gen_pointcloud(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
 
-			except:
-				self.error_count += 1
-				print(f"Error {self.error_count} in mesh {uid}.", flush=True)
-				print(traceback.format_exc(), flush=True)
-				if self.args.debug:
-					raise ValueError
-				with open(os.path.join(self.args.log_dir, "error_uids.txt"), "a+") as f:
-					f.writelines(uid+'\n')
