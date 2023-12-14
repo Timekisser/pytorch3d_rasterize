@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=4,5,6,7
 N_GPUS=4
 output_dir=data/ShapeNet
 log_dir=logs
@@ -13,11 +13,11 @@ main.py \
 --shapenet_filelist_dir ${output_dir}/filelist \
 --output_dir ${output_dir} \
 --pointcloud_folder "pointcloud_render_20w" \
---image_folder "image_600" \
+--image_folder "image_1024" \
 --log_dir ${log_dir} \
 --num_workers 4 \
 --num_points 200000 \
---image_size 600 \
+--image_size 1024 \
 --file_list "train_im_5.txt" "test_im_5.txt" \
 --save_file_type "image" \
 --camera_mode "Orthographic" \
