@@ -20,7 +20,7 @@ from utils.distributed import (
 )
 import traceback
 os.environ['PYOPENGL_PLATFORM'] = 'egl'
-# os.environ['MESA_GL_VERSION_OVERRIDE'] = '3.3'
+# os.environ['MESA_GL_VERSION_OVERRIDE'] = '4.3'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def build_dataloader(args):

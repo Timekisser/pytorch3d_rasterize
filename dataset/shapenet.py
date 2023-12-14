@@ -197,9 +197,9 @@ class ShapeNetFileList:
 			filepath_image = os.path.join(self.output_dir, self.args.image_folder, filename)
 			if self.args.resume == True:
 				uid_exists = True
-				if not os.path.exists(filepath_pointcloud):
+				if "data" in self.args.save_file_type and not os.path.exists(filepath_pointcloud):
 					uid_exists = False
-				if not os.path.exists(filepath_image):
+				if "image" in self.args.save_file_type and not os.path.exists(filepath_image):
 					uid_exists = False
 				if not uid_exists:
 					uids.append(filename)
