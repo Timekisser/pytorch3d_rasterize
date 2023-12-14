@@ -16,9 +16,8 @@ def get_filenames(filelist):
 
 image_dir = "data/ShapeNet/image_1024"
 save_dir = "data/ShapeNet/sketch_1024"
-filelist = "data/ShapeNet/filelist/train_im_5.txt"
 
-filenames = get_filenames(filelist)
+filenames = get_filenames("data/ShapeNet/filelist/train_im_5.txt") + get_filenames("data/ShapeNet/filelist/test_im_5.txt")
 
 for filename in tqdm(filenames):
     for image_name in os.listdir(os.path.join(image_dir, filename)):
