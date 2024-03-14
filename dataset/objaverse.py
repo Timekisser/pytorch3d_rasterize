@@ -190,7 +190,8 @@ class ObjaverseFileList:
 		for uid in tqdm(all_uids):
 			filepath = self.object_paths[uid]
 			glb_path = os.path.join(self.base_dir, filepath)
-			pointcloud_path = os.path.join(self.output_dir, self.args.pointcloud_folder, uid[0], uid, "pointcloud.npz")
+			extend_uid = glb_path.split("/")[4] + "/" + uid
+			pointcloud_path = os.path.join(self.output_dir, self.args.pointcloud_folder, extend_uid, "pointcloud.npz")
 			if os.path.exists(glb_path):
 				if os.path.exists(pointcloud_path):
 					exist_count += 1

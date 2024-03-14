@@ -46,7 +46,7 @@ class PointCloudRender(torch.nn.Module):
 		if "image" in self.args.save_file_type:
 			self.image_dir = os.path.join(output_dir, self.args.image_folder)
 			output_dir_list.append(self.image_dir)
-		if "pointcloud" in self.args.save_file_type:
+		if "data" in self.args.save_file_type:
 			self.pointcloud_dir = os.path.join(output_dir, self.args.pointcloud_folder)
 			output_dir_list.append(self.pointcloud_dir)
 		for dir in output_dir_list:
@@ -202,6 +202,7 @@ class PointCloudRender(torch.nn.Module):
 		if "pointcloud" in self.args.save_file_type:
 			pointcloud.export(filename_ply, file_type="ply")
 		if "data" in self.args.save_file_type:
+			# print(filename_npy, flush=True)
 			np.savez(filename_npy, points=points.astype(np.float16), normals=normals.astype(np.float16), colors=colors.astype(np.float16))
 		if "normal" in self.args.save_file_type:
 			self.visualize_points_and_normals(points, normals, uid)
@@ -285,6 +286,6 @@ class PointCloudRender(torch.nn.Module):
 			texels = meshes.sample_textures(fragments).squeeze(-2)	
 			if "image" in self.args.save_file_type:
 				self.gen_image(fragments, texels, uid)
-			if "pointcloud" in self.args.save_file_type:
+			if "data" in self.args.save_file_type:
 				self.gen_pointcloud(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
 
