@@ -108,7 +108,7 @@ class PointCloudRender(torch.nn.Module):
 	# 	# Create a mesh renderer by composing a rasterizer and a shader
 	# 	return shader
 	
-	def render(self, meshes, uid, cameras):
+	def render(self, meshes, cameras):
 		rasterizer = self.get_rasterizer(meshes, cameras)
 		fragments = rasterizer(meshes)
 		# if "image" in self.args.save_file_type:
@@ -193,10 +193,8 @@ class PointCloudRender(torch.nn.Module):
 		ones = np.ones((colors.shape[0], 1))
 		colors_rgba = np.concatenate([colors, ones], axis=1)
 		pointcloud = trimesh.points.PointCloud(vertices=points, colors=colors_rgba)
-		if self.args.dataset == "Objaverse":
-			save_dir = os.path.join(self.pointcloud_dir, uid[0], uid)
-		else:
-			save_dir = os.path.join(self.pointcloud_dir, uid)
+
+		save_dir = os.path.join(self.pointcloud_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
 		filename_ply = os.path.join(save_dir, "pointcloud.ply")
 		filename_npy = os.path.join(save_dir, "pointcloud.npz")
@@ -263,7 +261,7 @@ class PointCloudRender(torch.nn.Module):
 				fragments = []
 				meshes = copy.deepcopy(mesh).extend(1)
 				for camera in self.cameras_list:
-					fragment = self.render(meshes, uid, camera)
+					fragment = self.render(meshes, camera)
 					pixel_coord_in_camera, pixel_normal = self.get_pixel_data(meshes, fragment) 	# (N, P, K, 3)
 					pixel_coords_in_camera.append(pixel_coord_in_camera)
 					pixel_normals.append(pixel_normal)
@@ -281,7 +279,7 @@ class PointCloudRender(torch.nn.Module):
 				meshes = mesh.to(device).extend(self.num_views)
 			else:
 				meshes = mesh.extend(self.num_views)
-				fragments = self.render(meshes, uid, self.cameras)
+				fragments = self.render(meshes, self.cameras)
 				pixel_coords_in_camera, pixel_normals = self.get_pixel_data(meshes, fragments) 	# (N, P, K, 3)
 			
 			texels = meshes.sample_textures(fragments).squeeze(-2)	

@@ -1,8 +1,8 @@
 export CUDA_VISIBLE_DEVICES=0
 N_GPUS=1
-objaverse_dir='/apdcephfs_cq3/share_1330077/dataset/objaverse/hf-objaverse-v1'
-output_dir='data/Objaverse'
-log_dir='logs'
+objaverse_dir=data/Objaverse/objaverse
+output_dir=data/Objaverse
+log_dir=logs
 
 torchrun \
 --rdzv_endpoint localhost:26500 \

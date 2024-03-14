@@ -100,6 +100,9 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			print("Invalid texture type.", flush=True)
 			return None, valid
 
+		if "object" in self.args.save_file_type:
+			self.save_obj(filename_obj, trimesh_mesh=geometry, pytorch3d_mesh=mesh)
+
 		return mesh, valid
 
 
@@ -121,6 +124,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
+		extend_uid = self.filelist.glbs[uid].split("/")[4] + "/" + uid
 		filename_pointcloud = os.path.join(self.args.output_dir, self.args.pointcloud_folder, uid, "pointcloud.npz")
 		if self.args.resume and os.path.exists(filename_pointcloud):
 			# print(f"Mesh {uid} has exists.", flush=True)
@@ -141,7 +145,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 			mesh, valid = None, False
 		return {
 			"mesh": mesh,
-			"uid": uid,
+			"uid": extend_uid,
 			"valid": valid,
 		}
 
@@ -173,7 +177,7 @@ class ObjaverseFileList:
 				all_uids += cat_uids
 		else:
 			all_uids = objaverse.load_uids()
-		# all_uids = ["e8e3894bc66843b9b4012f08613f44f1"]
+		# all_uids = ["87871d0522c9409f8e4012489764e793"]
 		
 		with open(os.path.join(self.args.log_dir, "error_uids.txt"), "r+") as f:
 			error_uids = f.read().splitlines()
