@@ -7,10 +7,8 @@ import trimesh
 import pathlib
 import numpy as np
 from tqdm import tqdm
-import open3d as o3d
 import pytorch3d
-from pytorch3d.io import IO, load_obj
-from pytorch3d.structures import Meshes, Pointclouds
+from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
 	Textures,
 	TexturesUV,
@@ -24,7 +22,7 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		self.args = args
 		self.device = args.device
 		self.output_dir = args.output_dir
-		self.pointcloud_dir = os.path.join(self.output_dir, "pointcloud")
+		self.pointcloud_dir = os.path.join(self.output_dir, self.args.pointcloud_folder)
 		self.mesh_dir = args.shapenet_mesh_dir
 		self.filelist = ShapeNetFileList(args, args.total_uid_counts)
 
@@ -41,21 +39,22 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		return geometry, valid
 
 	def get_textures(self, visual, verts, faces):
-		material = visual.material
 		# TODO: whether the mesh is valid
-		maps, main_color, valid = None, None, True
-		if isinstance(material, trimesh.visual.material.SimpleMaterial):
-			if material.image is not None:
-				maps = material.image
+		maps, main_color, vertex_colors, valid = None, None, None, True
+		if isinstance(visual, trimesh.visual.color.ColorVisuals):
+			vertex_colors = visual.vertex_colors
+		elif isinstance(visual.material, trimesh.visual.material.SimpleMaterial):
+			if visual.material.image is not None:
+				maps = visual.material.image
 			else:
-				main_color = material.main_color
+				main_color = visual.material.main_color
 		else:
-			if material.baseColorTexture is not None:
-				maps = material.baseColorTexture
-			elif material.baseColorFactor is not None:
-				main_color = material.baseColorFactor
+			if visual.material.baseColorTexture is not None:
+				maps = visual.material.baseColorTexture
+			elif visual.material.baseColorFactor is not None:
+				main_color = visual.material.baseColorFactor
 			else:
-				main_color = material.main_color
+				main_color = visual.material.main_color
 		if maps is not None:
 			if maps.mode != 'RGB':
 				maps = maps.convert('RGB')
@@ -63,13 +62,18 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			maps = torch.div(maps, 255.0)
 			maps = maps.unsqueeze(0)
 			uvs = torch.tensor(visual.uv, dtype=torch.float).unsqueeze(0)
-			textures = TexturesUV(maps, faces, uvs, padding_mode="reflection")
+			textures = TexturesUV(maps, faces, uvs)
+		elif vertex_colors is not None:
+			vert_colors = torch.tensor(vertex_colors, dtype=torch.float)
+			vert_colors = vert_colors[:, :3] / 255.
+			vert_colors = vert_colors.reshape(1, -1, 3)
+			textures = TexturesVertex(vert_colors)	
 		elif main_color is not None:
 			vert_colors = torch.tensor(main_color, dtype=torch.float)
 			vert_colors = vert_colors[:3] / 255.
 			vert_colors = vert_colors.reshape(1, 1, -1).repeat(1, verts.shape[1], 1)
 			textures = TexturesVertex(vert_colors)
-		return textures, valid
+		return textures, valid	
 
 	def barycentric_interpolation(self, points, values, interp_points):
 		# 计算重心坐标
@@ -137,13 +141,11 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 		faces = torch.tensor(geometry.faces, dtype=torch.long).unsqueeze(0)
 		textures, valid = self.get_textures(geometry.visual, verts, faces)
 		mesh = Meshes(verts, faces, textures)
-
+		mesh._faces_normals_packed = torch.tensor(geometry.face_normals)
 		if not valid:
 			print("Invalid texture type.", flush=True)
 			return None, valid
 
-		if "object" in self.args.save_file_type:
-			self.save_obj(filename, pytorch3d_mesh=mesh)
 		return mesh, valid
 
 	def save_obj(self, filename, trimesh_mesh=None, pytorch3d_mesh=None):
@@ -151,22 +153,15 @@ class ShapeNetDataset(torch.utils.data.Dataset):
 			save_dir = os.path.join(self.output_dir, f"temp/{filename}/trimesh")
 			os.makedirs(save_dir, exist_ok=True)
 			trimesh.exchange.export.export_mesh(trimesh_mesh, os.path.join(save_dir, f"trimesh.obj"), file_type="obj")
-		if pytorch3d_mesh is not None:
-			save_dir = os.path.join(self.output_dir, f"temp/{filename}/pytorch3d")
-			os.makedirs(save_dir, exist_ok=True)
-			IO().save_mesh(pytorch3d_mesh, os.path.join(save_dir, f"pytorch3d.obj"), include_textures=True)
+
 
 	def __len__(self):
 		return len(self.filelist.uids)
 
 	def __getitem__(self, idx):
 		uid = self.filelist.uids[idx]
-		filename_ply = os.path.join(self.pointcloud_dir, uid, "pointcloud.npz")
-		if self.args.resume and os.path.exists(filename_ply):
-			print(f"Mesh {uid} has exists.", flush=True)
-			mesh, valid = None, False
-		else:
-			mesh, valid = self.load_mesh(uid)
+		
+		mesh, valid = self.load_mesh(uid)
 		return {
 			"mesh": mesh,
 			"uid": uid,
@@ -197,14 +192,19 @@ class ShapeNetFileList:
 
 	def get_uids(self):
 		uids = []
-		for filename in self.filenames:
-			if self.args.get_interior_points:
-				filepath = os.path.join(self.output_dir, "interior", filename, "interior.npz")
-			elif self.args.get_render_points:
-				filepath = os.path.join(self.output_dir, "pointcloud", filename, "pointcloud.npz")
-			elif self.args.mesh_repair:
-				filepath = os.path.join(self.output_dir, "mesh_repair", filename, "model.obj")
-			if self.args.resume == False or os.path.exists(filepath) == False:
+		for filename in tqdm(self.filenames):
+			filepath_pointcloud = os.path.join(self.output_dir, self.args.pointcloud_folder, filename, "pointcloud.npz")
+			filepath_image = os.path.join(self.output_dir, self.args.image_folder, filename)
+			if self.args.resume == True:
+				uid_exists = True
+				if "data" in self.args.save_file_type and not os.path.exists(filepath_pointcloud):
+					uid_exists = False
+				if "image" in self.args.save_file_type and not os.path.exists(filepath_image):
+					uid_exists = False
+				if not uid_exists:
+					uids.append(filename)
+			else:
 				uids.append(filename)
+				
 		return uids
 
