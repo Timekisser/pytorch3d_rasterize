@@ -14,13 +14,14 @@ from pytorch3d.renderer import (
 	TexturesUV,
 	TexturesVertex,
 )
-
+from utils.utils import get_filenames
 class ObjaverseDataset(torch.utils.data.Dataset):
 	def __init__(self, args):
 		super(ObjaverseDataset, self).__init__()
 		self.args = args
 		self.device = args.device
-		self.filelist = ObjaverseFileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir)
+		filelist = get_filenames("objaverse_5w.txt", "data/Objaverse/filelist")
+		self.filelist = ObjaverseFileList(args, args.total_uid_counts, args.objaverse_dir, args.output_dir, filelist)
 		self.output_dir = args.output_dir
 
 	def get_geometry(self, filename_obj):
@@ -154,7 +155,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
 
 
 class ObjaverseFileList:
-	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse", output_dir="data/Objaverse"):
+	def __init__(self, args, total_uid_counts=10, objaverse_dir="/mnt/sdc/weist/objaverse", output_dir="data/Objaverse", filelist=None):
 		self.args = args
 		objaverse._VERSIONED_PATH = objaverse_dir 
 		self.total_uid_counts = total_uid_counts
@@ -163,45 +164,13 @@ class ObjaverseFileList:
 		self.object_paths = objaverse._load_object_paths()
 		self.output_dir = output_dir
 		self.base_dir = objaverse_dir
-		self.uids = []
+		self.uids = [uid.split("/")[-1] for uid in filelist]
 		self.annotations = []
 
 		self.get_glbs()
-		self.get_filelists()
+		# self.get_filelists()
 
 	def get_glbs(self):
-		self.uids = []
-		all_uids = []
-		if self.args.have_category:
-			for category, cat_uids in self.lvis_annotations.items():
-				all_uids += cat_uids
-		else:
-			all_uids = objaverse.load_uids()
-		# all_uids = ["87871d0522c9409f8e4012489764e793"]
-		
-		with open(os.path.join(self.args.log_dir, "error_uids.txt"), "r+") as f:
-			error_uids = f.read().splitlines()
-		# random.shuffle(all_uids)
-		all_uids = set(all_uids)
-		error_uids = set(error_uids)
-		all_uids -= error_uids
-
-		exist_count = 0
-		for uid in tqdm(all_uids):
-			filepath = self.object_paths[uid]
-			glb_path = os.path.join(self.base_dir, filepath)
-			extend_uid = glb_path.split("/")[4] + "/" + uid
-			pointcloud_path = os.path.join(self.output_dir, self.args.pointcloud_folder, extend_uid, "pointcloud.npz")
-			if os.path.exists(glb_path):
-				if os.path.exists(pointcloud_path):
-					exist_count += 1
-				if not (self.args.resume and os.path.exists(pointcloud_path)):
-					self.uids.append(uid)
-			if len(self.uids) >= self.total_uid_counts:
-				break
-		# self.annotations = objaverse.load_annotations(self.uids)
-		# self.uids = all_uids
-		print(f"{exist_count} files exist.", flush=True)
 		processes = 24 #mp.cpu_count()
 		self.glbs = objaverse.load_objects(self.uids, processes)
 
@@ -212,8 +181,8 @@ class ObjaverseFileList:
 		filelist_folder = os.path.join(root_folder, 'filelist')
 		if not os.path.exists(filelist_folder):
 			os.makedirs(filelist_folder)
-		train_list = os.path.join(filelist_folder, 'train.txt')
-		eval_list = os.path.join(filelist_folder, 'val.txt')
+		train_list = os.path.join(filelist_folder, 'objaverse_5w_train.txt')
+		eval_list = os.path.join(filelist_folder, 'objaverse_5w_val.txt')
 		filenames = list(self.glbs.keys())
 		with open(train_list, "w") as f:
 			for filename in filenames[:train_length]:

@@ -18,7 +18,7 @@ main.py \
 --num_workers 4 \
 --total_uid_counts 8000000 \
 --num_points 200000 \
---image_size 624 \
---save_file_type "data" \
+--image_size 1024 \
+--save_file_type "image" \
 --resume \
 ####
