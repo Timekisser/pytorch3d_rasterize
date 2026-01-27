@@ -17,6 +17,7 @@ from pytorch3d.renderer import (
 from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.mesh.rasterizer import Fragments
+from utils.utils import generate_views
 
 class PointCloudRender(torch.nn.Module):
 	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
@@ -67,6 +68,13 @@ class PointCloudRender(torch.nn.Module):
 		else:
 			raise Exception("No such camera mode.")
 		return cameras
+
+	def update_cameras(self):
+		offset = (np.random.rand(), np.random.rand())
+		views = generate_views(self.num_views, offset=offset)
+		self.elevation = [view['elev'] for view in views]
+		self.azim_angle = [view['azim'] for view in views]
+		self.cameras = self.get_cameras(self.elevation, self.azim_angle)
 
 	def get_bin_size(self, meshes):
 		if self.args.bin_mode == "coarse":
@@ -250,6 +258,7 @@ class PointCloudRender(torch.nn.Module):
 
 	def forward(self, batch):
 		# TODO: render by a batch
+		self.update_cameras()
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
