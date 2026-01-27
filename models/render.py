@@ -32,6 +32,7 @@ class PointCloudRender(torch.nn.Module):
 		self.num_points = args.num_points
 		self.device = device
 		self.error_count = 0
+		self.fov = 60 / 180 * np.pi
 
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
@@ -71,6 +72,7 @@ class PointCloudRender(torch.nn.Module):
 
 	def update_cameras(self):
 		offset = (np.random.rand(), np.random.rand())
+		# offset = (0, 0)
 		views = generate_views(self.num_views, offset=offset)
 		self.elevation = [view['elev'] for view in views]
 		self.azim_angle = [view['azim'] for view in views]
@@ -125,6 +127,32 @@ class PointCloudRender(torch.nn.Module):
 		# 	images = None
 		return fragments
 
+	def export_camera_transforms(self, save_dir):
+		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
+		R_c2w= self.cameras.R.transpose(1, 2)
+
+		camera_pos = self.cameras.get_camera_center().to(self.device)
+
+		to_export = {"frames": []}
+		for i in range(self.num_views):
+			transform_matrix = torch.eye(4)
+			transform_matrix[:3, :3] = R_c2w[i]
+			transform_matrix[:3, 3] = camera_pos[i]
+			frame = {
+				# "file_path": f"{i:03d}.png",
+				"file_path": f"elev{int(self.elevation[i])}_azim{int(self.azim_angle[i])}.png",
+				"transform_matrix": transform_matrix.cpu().numpy().tolist(),
+				"camera_angle_x": self.fov,
+				'depth': {
+					'min': self.camera_dist - torch.sqrt(torch.tensor(3.0)).item(),
+					'max': self.camera_dist + torch.sqrt(torch.tensor(3.0)).item(),
+				}
+			}
+			to_export["frames"].append(frame)
+		with open(os.path.join(save_dir, "transforms.json"), 'w') as f:
+			import json
+			json.dump(to_export, f, indent=4)
+
 	def gen_image(self, fragments, pix_coords, pix_norms, images, uid):
 		# print(pix_norms.shape)
 		camera_centers = self.cameras.get_camera_center().to(pix_coords.device)
@@ -160,7 +188,7 @@ class PointCloudRender(torch.nn.Module):
 		pix_norms = (pix_norms * 255.0).to(torch.uint8).cpu().numpy()
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
-		# print("Saved image as " + str(save_dir), flush=True)
+		self.export_camera_transforms(save_dir)
 		for i in range(self.num_views):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]

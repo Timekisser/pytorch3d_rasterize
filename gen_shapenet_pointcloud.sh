@@ -15,7 +15,7 @@ main.py \
 --shapenet_filelist_dir ${input_dir}/filelist \
 --output_dir ${output_dir} \
 --pointcloud_folder "pointcloud_render_20w" \
---image_folder "image_1024" \
+--image_folder "image_1024_test1" \
 --log_dir ${log_dir} \
 --num_workers 4 \
 --num_points 200000 \
