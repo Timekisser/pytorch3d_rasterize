@@ -125,12 +125,28 @@ class PointCloudRender(torch.nn.Module):
 		# 	images = None
 		return fragments
 
-	def gen_image(self, fragments, images, uid):
+	def gen_image(self, fragments, pix_coords, pix_norms, images, uid):
+		# print(pix_norms.shape)
+		camera_centers = self.cameras.get_camera_center().to(pix_coords.device)
+		# print("Shape of camera centers:", camera_centers.shape)
+		# print("Shape of pixel coords:", pix_coords.shape)
+		# print("Shape of pixel norms:", pix_norms.shape)
+		# print("Shape of images:", images.shape)
+		pix_coords = pix_coords.squeeze(-2)
+		pix_norms = pix_norms.squeeze(-2)
+		camera_centers = camera_centers.unsqueeze(1).unsqueeze(1).expand_as(pix_coords)
+		camera_vectors = camera_centers - pix_coords
+		pix_norms = pix_norms / torch.norm(pix_norms, p=2, dim=-1, keepdim=True)
+		normals_dot = torch.sum(camera_vectors * pix_norms, dim=-1)
+		pix_norms[normals_dot < 0.0] = -1.0 * pix_norms[normals_dot < 0.0]
 		valid = fragments.pix_to_face[:, :, :, 0] != -1
 		images[valid.logical_not(), :] = 1.0
+		pix_norms[valid.logical_not(), :] = 0.0
 		alpha = torch.zeros(images.shape[:3], device=images.device).unsqueeze(-1)
 		alpha[valid] = 1.0
 		images = torch.cat([images, alpha], dim=-1)
+		pix_norms = (pix_norms + 1.0) / 2.0
+		
 		depth_images = fragments.zbuf[..., 0]
 		depth_min = self.camera_dist - 1.0 * torch.sqrt(torch.tensor(3.0))
 		depth_max = self.camera_dist + 1.0 * torch.sqrt(torch.tensor(3.0))
@@ -141,6 +157,7 @@ class PointCloudRender(torch.nn.Module):
 
 
 		images = (images * 255.0).to(torch.uint8).cpu().numpy()
+		pix_norms = (pix_norms * 255.0).to(torch.uint8).cpu().numpy()
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
 		# print("Saved image as " + str(save_dir), flush=True)
@@ -153,6 +170,9 @@ class PointCloudRender(torch.nn.Module):
 			filename_depth = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}_depth.png")
 			depth_im = Image.fromarray(depth_images[i, ...], mode="I;16")
 			depth_im.save(filename_depth)
+			filename_normal = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}_normal.png")
+			normal_im = Image.fromarray(pix_norms[i, ...], mode="RGB")
+			normal_im.save(filename_normal)
 
 	def get_pixel_data(self, meshes, fragments):
 		verts = meshes.verts_packed()  # (N, V, 3)
@@ -166,6 +186,7 @@ class PointCloudRender(torch.nn.Module):
 		faces_normals = meshes._faces_normals_packed
 		pixel_valid = fragments.pix_to_face != -1
 		pixel_normals = faces_normals[fragments.pix_to_face]
+		# print(pixel_normals.shape)
 		pixel_normals[pixel_valid.logical_not()] = 0
 		return pixel_coords_in_camera, pixel_normals
 
@@ -304,7 +325,7 @@ class PointCloudRender(torch.nn.Module):
 			
 			texels = meshes.sample_textures(fragments).squeeze(-2)	
 			if "image" in self.args.save_file_type:
-				self.gen_image(fragments, texels, uid)
+				self.gen_image(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
 			if "data" in self.args.save_file_type:
 				self.gen_pointcloud(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
 
