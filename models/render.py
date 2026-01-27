@@ -20,7 +20,7 @@ from pytorch3d.renderer.mesh.rasterizer import Fragments
 from utils.utils import generate_views
 
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=512, camera_dist=2, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -131,6 +131,13 @@ class PointCloudRender(torch.nn.Module):
 		alpha = torch.zeros(images.shape[:3], device=images.device).unsqueeze(-1)
 		alpha[valid] = 1.0
 		images = torch.cat([images, alpha], dim=-1)
+		depth_images = fragments.zbuf[..., 0]
+		depth_min = self.camera_dist - 1.0 * torch.sqrt(torch.tensor(3.0))
+		depth_max = self.camera_dist + 1.0 * torch.sqrt(torch.tensor(3.0))
+		depth_images = (depth_images - depth_min) / (depth_max - depth_min)
+		depth_images[valid.logical_not()] = 1.0
+
+		depth_images = (depth_images * 65535.0).to(torch.uint16).cpu().numpy()
 
 
 		images = (images * 255.0).to(torch.uint8).cpu().numpy()
@@ -143,6 +150,9 @@ class PointCloudRender(torch.nn.Module):
 			filename_png = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}.png")
 			im = Image.fromarray(images[i, ...], mode="RGBA")
 			im.save(filename_png)
+			filename_depth = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}_depth.png")
+			depth_im = Image.fromarray(depth_images[i, ...], mode="I;16")
+			depth_im.save(filename_depth)
 
 	def get_pixel_data(self, meshes, fragments):
 		verts = meshes.verts_packed()  # (N, V, 3)
