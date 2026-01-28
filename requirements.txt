@@ -1,0 +1,6 @@
+trimesh
+pyrender
+pyopengl
+numpy
+tqdm
+opencv-python
