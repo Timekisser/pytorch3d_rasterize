@@ -18,3 +18,4 @@ sh run.sh
 
 Parameters in `run.sh` can be modified to fit your needs. Some of the important parameters are:
 - `--dataset`: Dataset name, we provide support for ShapeNet and Objaverse
+- `--save_file_type`: ['pointcloud', 'image', 'data'], 'pointcloud' saves point clouds as .ply files, 'image' saves multi-view RGB-D and normal images, and data saves point clouds as .npz files.
