@@ -17,9 +17,10 @@ from pytorch3d.renderer import (
 from pytorch3d.renderer.opengl import MeshRasterizerOpenGL
 from pytorch3d.ops.interp_face_attrs import interpolate_face_attributes
 from pytorch3d.renderer.mesh.rasterizer import Fragments
+from utils.utils import generate_views
 
 class PointCloudRender(torch.nn.Module):
-	def __init__(self, args, image_size=600, camera_dist=3, output_dir="data/Objaverse",  device="cuda") -> None:
+	def __init__(self, args, image_size=512, camera_dist=2, output_dir="data/Objaverse",  device="cuda") -> None:
 		super().__init__()
 		self.args = args
 		self.image_size = image_size
@@ -31,6 +32,7 @@ class PointCloudRender(torch.nn.Module):
 		self.num_points = args.num_points
 		self.device = device
 		self.error_count = 0
+		self.fov = 60 / 180 * np.pi
 
 		# self.elevation = self.elevation * self.batch_size
 		# self.azim_angle = self.azim_angle * self.batch_size
@@ -67,6 +69,14 @@ class PointCloudRender(torch.nn.Module):
 		else:
 			raise Exception("No such camera mode.")
 		return cameras
+
+	def update_cameras(self):
+		offset = (np.random.rand(), np.random.rand())
+		# offset = (0, 0)
+		views = generate_views(self.num_views, offset=offset)
+		self.elevation = [view['elev'] for view in views]
+		self.azim_angle = [view['azim'] for view in views]
+		self.cameras = self.get_cameras(self.elevation, self.azim_angle)
 
 	def get_bin_size(self, meshes):
 		if self.args.bin_mode == "coarse":
@@ -117,24 +127,80 @@ class PointCloudRender(torch.nn.Module):
 		# 	images = None
 		return fragments
 
-	def gen_image(self, fragments, images, uid):
+	def export_camera_transforms(self, save_dir):
+		R, T = look_at_view_transform(dist=self.camera_dist, elev=self.elevation, azim=self.azim_angle, device=self.device)
+		R_c2w= self.cameras.R.transpose(1, 2)
+
+		camera_pos = self.cameras.get_camera_center().to(self.device)
+
+		to_export = {"frames": []}
+		for i in range(self.num_views):
+			transform_matrix = torch.eye(4)
+			transform_matrix[:3, :3] = R_c2w[i]
+			transform_matrix[:3, 3] = camera_pos[i]
+			frame = {
+				# "file_path": f"{i:03d}.png",
+				"file_path": f"elev{int(self.elevation[i])}_azim{int(self.azim_angle[i])}.png",
+				"transform_matrix": transform_matrix.cpu().numpy().tolist(),
+				"camera_angle_x": self.fov,
+				'depth': {
+					'min': self.camera_dist - torch.sqrt(torch.tensor(3.0)).item(),
+					'max': self.camera_dist + torch.sqrt(torch.tensor(3.0)).item(),
+				}
+			}
+			to_export["frames"].append(frame)
+		with open(os.path.join(save_dir, "transforms.json"), 'w') as f:
+			import json
+			json.dump(to_export, f, indent=4)
+
+	def gen_image(self, fragments, pix_coords, pix_norms, images, uid):
+		# print(pix_norms.shape)
+		camera_centers = self.cameras.get_camera_center().to(pix_coords.device)
+		# print("Shape of camera centers:", camera_centers.shape)
+		# print("Shape of pixel coords:", pix_coords.shape)
+		# print("Shape of pixel norms:", pix_norms.shape)
+		# print("Shape of images:", images.shape)
+		pix_coords = pix_coords.squeeze(-2)
+		pix_norms = pix_norms.squeeze(-2)
+		camera_centers = camera_centers.unsqueeze(1).unsqueeze(1).expand_as(pix_coords)
+		camera_vectors = camera_centers - pix_coords
+		pix_norms = pix_norms / torch.norm(pix_norms, p=2, dim=-1, keepdim=True)
+		normals_dot = torch.sum(camera_vectors * pix_norms, dim=-1)
+		pix_norms[normals_dot < 0.0] = -1.0 * pix_norms[normals_dot < 0.0]
 		valid = fragments.pix_to_face[:, :, :, 0] != -1
 		images[valid.logical_not(), :] = 1.0
+		pix_norms[valid.logical_not(), :] = 0.0
 		alpha = torch.zeros(images.shape[:3], device=images.device).unsqueeze(-1)
 		alpha[valid] = 1.0
 		images = torch.cat([images, alpha], dim=-1)
+		pix_norms = (pix_norms + 1.0) / 2.0
+		
+		depth_images = fragments.zbuf[..., 0]
+		depth_min = self.camera_dist - 1.0 * torch.sqrt(torch.tensor(3.0))
+		depth_max = self.camera_dist + 1.0 * torch.sqrt(torch.tensor(3.0))
+		depth_images = (depth_images - depth_min) / (depth_max - depth_min)
+		depth_images[valid.logical_not()] = 1.0
+
+		depth_images = (depth_images * 65535.0).to(torch.uint16).cpu().numpy()
 
 
 		images = (images * 255.0).to(torch.uint8).cpu().numpy()
+		pix_norms = (pix_norms * 255.0).to(torch.uint8).cpu().numpy()
 		save_dir = os.path.join(self.image_dir, uid)
 		os.makedirs(save_dir, exist_ok=True)
-		# print("Saved image as " + str(save_dir), flush=True)
+		self.export_camera_transforms(save_dir)
 		for i in range(self.num_views):
 			elev = self.elevation[i]
 			azim = self.azim_angle[i]
 			filename_png = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}.png")
 			im = Image.fromarray(images[i, ...], mode="RGBA")
 			im.save(filename_png)
+			filename_depth = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}_depth.png")
+			depth_im = Image.fromarray(depth_images[i, ...], mode="I;16")
+			depth_im.save(filename_depth)
+			filename_normal = os.path.join(save_dir, f"elev{int(elev)}_azim{int(azim)}_normal.png")
+			normal_im = Image.fromarray(pix_norms[i, ...], mode="RGB")
+			normal_im.save(filename_normal)
 
 	def get_pixel_data(self, meshes, fragments):
 		verts = meshes.verts_packed()  # (N, V, 3)
@@ -148,6 +214,7 @@ class PointCloudRender(torch.nn.Module):
 		faces_normals = meshes._faces_normals_packed
 		pixel_valid = fragments.pix_to_face != -1
 		pixel_normals = faces_normals[fragments.pix_to_face]
+		# print(pixel_normals.shape)
 		pixel_normals[pixel_valid.logical_not()] = 0
 		return pixel_coords_in_camera, pixel_normals
 
@@ -250,6 +317,7 @@ class PointCloudRender(torch.nn.Module):
 
 	def forward(self, batch):
 		# TODO: render by a batch
+		self.update_cameras()
 		for data in batch:
 			mesh, uid, valid = data["mesh"], data["uid"], data["valid"]
 			if not valid:
@@ -285,7 +353,7 @@ class PointCloudRender(torch.nn.Module):
 			
 			texels = meshes.sample_textures(fragments).squeeze(-2)	
 			if "image" in self.args.save_file_type:
-				self.gen_image(fragments, texels, uid)
+				self.gen_image(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
 			if "data" in self.args.save_file_type:
 				self.gen_pointcloud(fragments, pixel_coords_in_camera, pixel_normals, texels, uid)
 
