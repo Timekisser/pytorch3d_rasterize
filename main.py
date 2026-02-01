@@ -1,5 +1,4 @@
 #--------------------------------------------------------
-# Dual Octree Graph Networks
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.utils.data.sampler import BatchSampler, SequentialSampler
@@ -11,7 +10,6 @@ import multiprocessing as mp
 from tqdm import tqdm
 from dataset.objaverse import ObjaverseDataset
 from dataset.shapenet import ShapeNetDataset, ShapeNetFileList
-from dataset.prefetch import DataPreFetcher 
 from models.render import PointCloudRender
 from utils.distributed import (
 	get_rank,
@@ -57,9 +55,6 @@ def generate_pointcloud(args):
 	model.to(args.device)
 	data_loader = build_dataloader(args)
 
-	# fetcher = DataPreFetcher(data_loader, args.device)
-	# batch = fetcher.next()
-	# for i in range(len(data_loader)):
 	error_count = 0
 	for batch in tqdm(data_loader):
 		try:
@@ -77,45 +72,6 @@ def generate_pointcloud(args):
 				f.writelines(uid+'\n')
 		
 
-		# torch.cuda.empty_cache()
-		# batch = fetcher.next()
-
-def shapenet_mesh_repair(args, num_processes=4):
-	gpu_ids = os.environ['CUDA_VISIBLE_DEVICES'].split(",")
-	world_size = len(gpu_ids)
-	print(num_processes, gpu_ids, flush=True)
-	filelist = ShapeNetFileList(args, args.total_uid_counts)
-	mesh_dir = args.shapenet_mesh_dir
-	num_meshes = len(filelist.uids)
-	mesh_per_process = num_meshes // num_processes
-
-	def process(process_id):
-		os.environ['CUDA_VISIBLE_DEVICES']=str(gpu_ids[process_id % world_size])
-		for i in tqdm(range(process_id * mesh_per_process, (process_id + 1)* mesh_per_process), ncols=80):
-			if i >= num_meshes:
-				continue
-			uid = filelist.uids[i]
-			print(f"Repairing mesh {uid}", flush=True)
-			folder_obj = os.path.join(mesh_dir, uid)
-			folder_repair = os.path.join(args.output_dir, "mesh_repair", uid)
-			filename_obj = os.path.join(folder_obj, "model.obj")
-			filename_repair = os.path.join(folder_repair, "model.obj")
-			
-			os.makedirs(folder_repair, exist_ok=True)
-			shutil.copytree(folder_obj, folder_repair, dirs_exist_ok=True)
-			os.rename(filename_repair, os.path.join(folder_repair, "origin.obj"))
-			command = f"./utils/RayCastMeshRepair --input {filename_obj} --output {filename_repair}"
-			output = os.system(command)
-			assert output == 0
-	
-	if num_processes == 1:
-		process(0)
-	else:
-		processes = [mp.Process(target=process, args=[pid]) for pid in range(num_processes)]
-		for p in processes:
-			p.start()
-		for p in processes:
-			p.join()
 
 if __name__ == "__main__":
 	# torch.multiprocessing.set_start_method('spawn')

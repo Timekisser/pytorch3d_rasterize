@@ -26,7 +26,4 @@ main.py \
 --resume \
 # --camera_mode "Orthographic" \
 # --save_memory
-# --debug \
-# "train_chair.txt" "test_chair.txt" "train_car.txt" "test_car.txt" "train_table.txt" "test_table.txt" "train_rifle.txt" "test_rifle.txt" 
-# --debug \
 ######

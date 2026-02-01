@@ -166,3 +166,4 @@ cython_debug/
 /pyrender
 /test_logs
 /test_shell
+/test_code
