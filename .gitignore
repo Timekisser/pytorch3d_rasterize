@@ -161,7 +161,7 @@ cython_debug/
 
 /.vscode
 /mytools
-/data
+/data/ShapeNet
 /logs
 /pyrender
 /test_logs

@@ -51,6 +51,7 @@ def generate_pointcloud(args):
 		image_size=args.image_size,
 		output_dir=args.output_dir,
 		device=args.device,
+		camera_dist=2.5,
 	)
 	model.to(args.device)
 	data_loader = build_dataloader(args)
@@ -110,7 +111,6 @@ if __name__ == "__main__":
 	parser.add_argument("--image_size", default=600, type=int)	
 	parser.add_argument("--points_dilate", default=0.005, type=float)
 	parser.add_argument("--faces_per_pixel", default=1, type=int)
-	parser.add_argument("--mesh_repair", action="store_true")
 	parser.add_argument("--cull_backfaces", action="store_true")
 	parser.add_argument("--save_memory", action="store_true")
 
@@ -130,11 +130,7 @@ if __name__ == "__main__":
 		synchronize()
 
 	print(args, flush=True)
-	if args.mesh_repair:
-		if args.dataset == "ShapeNet":
-			shapenet_mesh_repair(args)
-	else:
-		generate_pointcloud(args)
+	generate_pointcloud(args)
 	
 	sys.stdout.close()
 	sys.stderr.close()
